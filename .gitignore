@@ -1,1 +1,3 @@
+languagemodels-venv/
+examples/datasets
 *.pyc
