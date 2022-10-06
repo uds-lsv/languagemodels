@@ -6,6 +6,15 @@ from tokenizers.processors import TemplateProcessing
 
 
 def train_word_level_tokenizer(vocab_size, files):
+    """Train a word-level tokenizer on a list of files
+
+    Args:
+        vocab_size (int): vocabulary size of the tokenizer
+        files (List[str]): list of files on which the tokenizer will be trained 
+
+    Returns:
+        Tokenizer: a tokenizer
+    """
     tokenizer = Tokenizer(model=WordLevel(unk_token="<unk>"))
 
     # these are default and can be overwritten
@@ -14,7 +23,7 @@ def train_word_level_tokenizer(vocab_size, files):
         special_tokens=["<unk>", "<s>", "</s>"]
     )
 
-    # TODO(mm): look into Normaliuzers and additional Pre-tokenizers to provide good defaults
+    # TODO(mm): look into Normalizers and additional Pre-tokenizers and provide good defaults
 
     tokenizer.pre_tokenizer = Whitespace()
     tokenizer.train(files, trainer)
