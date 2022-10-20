@@ -1,15 +1,18 @@
 from torch import nn
 
-from languagemodels.models.dummy import DummyLM
+from languagemodels.models.bigram.modeling_bigram import BigramLM
 
 LMs = {
-    "dummy-lm": DummyLM,
+    # "dummy-lm": DummyLM,
+    "bigram-lm": BigramLM,
 }
 
 
 class LMFactory():
     @classmethod
-    def get_lm(cls, name_or_path, config, pre_trained=False):
-        assert name_or_path in LMs
-        lm = LMs.get(name_or_path).load_model(config, pre_trained)
+    def get_lm(cls, model_type, config, pre_trained=False, model_name_or_path=None):
+        assert model_type in LMs
+        if pre_trained:
+            assert model_name_or_path is not None
+        lm = LMs.get(model_type).load_model(config, pre_trained)
         return lm
