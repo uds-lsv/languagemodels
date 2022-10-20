@@ -1,5 +1,3 @@
-from modulefinder import Module
-from turtle import forward
 import torch
 from torch import nn
 
@@ -11,10 +9,10 @@ class DummyLM(LanguageModel):
         super().__init__(config)
 
     @classmethod
-    def load_model(cls, config, pre_trained=False):
+    def load_model(cls, config, pre_trained=False, model_name_or_path=None):
         return DummyLM(config)
 
-    def forward(self, input_ids, **kwargs):
+    def forward(self, input_ids, labels=None, **kwargs):
         logits = torch.rand(size=input_ids.size())
         # probs = torch.nn.functional.softmax(logits, dim=1)
         return logits
