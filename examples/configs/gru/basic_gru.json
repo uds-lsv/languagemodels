@@ -1,0 +1,10 @@
+{
+    "vocab_size": 30000,
+    "block_size": 128,
+    "cell_type": "gru",
+    "embedding_dim": 100,
+    "hidden_dim": 100,
+    "num_layers": 2,
+    "add_bias": true,
+    "dropout": 0.0
+}

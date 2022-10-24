@@ -21,6 +21,10 @@ def parse_args():
     parser.add_argument('--validation_file', type=str,
                         help="path to validation data")
 
+    # config args
+    parser.add_argument('--config_name_or_path', type=str,
+                        help="name or path of the config file to use")
+
     # model args
     parser.add_argument('--model_type', type=str,
                         help="type of the LM to use")
@@ -103,10 +107,8 @@ def main():
         args.tokenizer_name) if args.tokenizer_name is not None else Tokenizer.from_file(args.tokenizer_path)
 
     # load model
-    # TODO(mm): provide config file as an argument
-    config = BigramLMConfig(vocab_size=tokenizer.get_vocab_size())
-    model = LMFactory.get_lm(model_type=args.model_type, config=config,
-                             pre_trained=True if args.model_name_or_path is not None else False, model_name_or_path=args.model_name_or_path)
+    model, config = LMFactory.get_lm(model_type=args.model_type, config_name_or_path=args.config_name_or_path,
+                                     pre_trained=True if args.model_name_or_path is not None else False, model_name_or_path=args.model_name_or_path)
     model.to(args.device)
 
     # -------------------- end model and tokenizer --------------------
@@ -147,17 +149,20 @@ def main():
     stride = 1 if args.model_type == "bigram-lm" else block_size
 
     def group_sequences(sequences):
+        # concatenate all sequences into a single sequence
         concatenated_examples = {
             k: list(chain(*sequences[k])) for k in sequences.keys()}
         concatenated_examples["text"] = "".join(
             concatenated_examples["text"]).split()
 
-        total_length = len(concatenated_examples["input_ids"])
+        actual_total_length = len(concatenated_examples["input_ids"])
 
         # make sure data is divisible by block_size
         # as a result, we might ingore some tokens at the end of the sequence
-        if total_length >= block_size:
-            total_length = (total_length // block_size) * block_size
+        # TODO(mm): pad the last sequence instead
+        if actual_total_length >= block_size:
+            total_length = (actual_total_length // block_size) * block_size
+            print(f"Deleting {actual_total_length - total_length} tokens")
 
         # group sequences into blocks of length block_size
         # depending on the stridge, these blocks might be overlapping or not
@@ -178,16 +183,20 @@ def main():
     lm_datasets = tokenized_datasets.map(
         group_sequences,
         batched=True,
-        batch_size=100,
+        batch_size=1000,  # currently we group groups of 1000 samples together. For each of these groups we might delete some tokens
         num_proc=1,  # no parallel processing for now
         desc=f"Grouping datasets into chunks of size {block_size}"
     )
 
     # format dataset. we keep only the integer columns as we have to convert them to tensors
     train_dataset = lm_datasets["train"].with_format(
-        type="torch", columns=["input_ids", "attention_mask", "labels"])
+        type="torch", columns=["input_ids", "labels", "attention_mask", ])
     validation_dataset = lm_datasets["validation"].with_format(
-        type="torch", columns=["input_ids", "attention_mask", "labels"])
+        type="torch", columns=["input_ids", "labels", "attention_mask", ])
+
+    # print some examples from the training data
+    for idx in range(1):
+        print(train_dataset[idx])
 
     # -------------------- end process data --------------------
 
@@ -238,8 +247,9 @@ def main():
             delta = (end_time - start_time) * 1000  # ms
 
             if current_step % args.logging_steps == 0:
+                ppl = torch.exp(loss)
                 print(
-                    f"step: {current_step:>8} | batch loss: {loss.item():.4f} | predicted tokens: {predicted_tokens:>10} | step time: {delta:.2f}ms")
+                    f"step: {current_step:>8} | batch loss: {loss.item():.4f} | batch ppl: {ppl.item():.4f} | predicted tokens: {predicted_tokens:>10} | step time: {delta:.2f}ms")
 
             if current_step % args.eval_steps == 0:
                 eval_results = evaluate(model, validation_dataset, args)

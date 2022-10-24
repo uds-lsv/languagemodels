@@ -53,10 +53,3 @@ class BigramLM(LanguageModel):
                 logits.view(-1, logits.size(-1)), labels.view(-1), ignore_index=-100)
 
         return logits, loss
-
-    def compute_surprisal(self, input_ids, **kwargs):
-        self.eval()  # put model in evaluation mode (disable dropout)
-        logits, _ = self.forward(input_ids)
-        probs = F.softmax(logits)
-        surprisal = - torch.log2(probs)
-        return surprisal

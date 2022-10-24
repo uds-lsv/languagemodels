@@ -1,4 +1,7 @@
+import torch
+
 from torch import nn
+from torch.nn import functional as F
 
 
 class LanguageModel(nn.Module):
@@ -21,4 +24,8 @@ class LanguageModel(nn.Module):
         pass
 
     def compute_surprisal(self, input_ids, **kwargs):
-        pass
+        self.eval()  # put model in evaluation mode (disable dropout)
+        logits, _ = self.forward(input_ids)
+        probs = F.softmax(logits)
+        surprisal = - torch.log2(probs)
+        return surprisal
