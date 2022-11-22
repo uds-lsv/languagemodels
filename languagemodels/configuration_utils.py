@@ -6,8 +6,8 @@ from dataclasses import dataclass
 @dataclass
 class LanguageModelConfig():
     """Base class for all language model configurations
-
     """
+    # every LM will at least have these attributes
     vocab_size: int = None
     block_size: int = None
 
@@ -21,3 +21,6 @@ class LanguageModelConfig():
         with open(json_file, "r", encoding="utf-8") as reader:
             text = reader.read()
         return json.loads(text)
+
+    def to_dict(self):
+        return vars(self)

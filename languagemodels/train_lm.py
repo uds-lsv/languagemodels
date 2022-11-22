@@ -2,6 +2,7 @@ import argparse
 import time
 from itertools import chain
 import os
+import logging
 
 from datasets import load_dataset
 from tokenizers import Tokenizer
@@ -10,7 +11,9 @@ from torch.utils.data.dataloader import DataLoader
 from transformers import default_data_collator
 
 from lm_factory import LMFactory
-from models.bigram.configuration_bigram import BigramLMConfig
+from logging_utils import WandbLogger
+
+from utils import set_seed, get_timestamp, create_dir
 
 
 def parse_args():
@@ -52,9 +55,17 @@ def parse_args():
     parser.add_argument('--max_steps', type=int, default=1000,
                         help="maximum number of steps to train")
 
+    # wandb args
+    parser.add_argument('--wandb_project_name', type=str,
+                        help="name of the wandb project used for logging stuff")
+    parser.add_argument('--wandb_run_name', type=str, default=None,
+                        help="wandb name for the current run. If None, a random name will be choosen.")
+    parser.add_argument('--wandb_group_name', type=str, default="no-group",
+                        help="wandb group name for the current run.")
+
     # additional args
-    parser.add_argument('--save_dir', type=str, default=None,
-                        help="where to save the trained model")
+    parser.add_argument('--output_dir', type=str, required=True,
+                        help="where to save the trained model and other outputs")
     parser.add_argument('--device', type=str, default='cpu',
                         help="device to use for compute, examples: cpu|cuda|cuda:0")
     parser.add_argument('--seed', type=int, default=123, help="seed")
@@ -63,7 +74,19 @@ def parse_args():
 
     # TODO(mm): use assertions for some args
 
+    if os.environ["WANDB_DISABLED"] == "false":  # we are using wandb for logging
+        assert args.wandb_project_name is not None, "when using wandb, you need to specify a project name"
+
     return args
+
+
+def repackage_hidden(hidden_state):
+    """Wraps hidden states in new Tensors, to detach them from their history."""
+
+    if isinstance(hidden_state, torch.Tensor):
+        return hidden_state.detach()
+    else:
+        return tuple(repackage_hidden(t) for t in hidden_state)
 
 
 def evaluate(model, validation_dataset, args):
@@ -81,6 +104,19 @@ def evaluate(model, validation_dataset, args):
 
 def main():
     args = parse_args()
+
+    # -------------------- setup --------------------
+
+    set_seed(args.seed)
+    TIMESTAMP = get_timestamp()
+
+    # create a unique dir for the current run
+    dir_name = f"run_{TIMESTAMP}"
+    args.output_dir = create_dir(args.output_dir, dir_name)
+    if os.environ["WANDB_DISABLED"] == "false":
+        args.wandb_output_dir = create_dir(args.output_dir, "wandb")
+
+    # -------------------- end setup --------------------
 
     # -------------------- data loading --------------------
 
@@ -107,8 +143,8 @@ def main():
         args.tokenizer_name) if args.tokenizer_name is not None else Tokenizer.from_file(args.tokenizer_path)
 
     # load model
-    model, config = LMFactory.get_lm(model_type=args.model_type, config_name_or_path=args.config_name_or_path,
-                                     pre_trained=True if args.model_name_or_path is not None else False, model_name_or_path=args.model_name_or_path)
+    model, model_config = LMFactory.get_lm(model_type=args.model_type, config_name_or_path=args.config_name_or_path,
+                                           pre_trained=True if args.model_name_or_path is not None else False, model_name_or_path=args.model_name_or_path)
     model.to(args.device)
 
     # -------------------- end model and tokenizer --------------------
@@ -162,7 +198,8 @@ def main():
         # TODO(mm): pad the last sequence instead
         if actual_total_length >= block_size:
             total_length = (actual_total_length // block_size) * block_size
-            print(f"Deleting {actual_total_length - total_length} tokens")
+            print(
+                f"Deleting {actual_total_length - total_length} tokens")
 
         # group sequences into blocks of length block_size
         # depending on the stridge, these blocks might be overlapping or not
@@ -211,10 +248,17 @@ def main():
 
     # -------------------- training loop --------------------
 
+    # setup wandb logging
+    if os.environ["WANDB_DISABLED"] == "false":
+        config = {**model_config.to_dict(), **vars(args)}
+        wandb_logger = WandbLogger(
+            args.wandb_project_name, args.wandb_output_dir, args.wandb_run_name, args.wandb_group_name, config)
+
     epoch = 1
     current_step = 0
     predicted_tokens = 0
     continue_training = True
+    hidden_state = None
     model.train()  # put model in training mode
     while continue_training:
         # evaluate model before training
@@ -222,7 +266,7 @@ def main():
 
         # ---> beginning of 1 epoch
         train_dataloader = DataLoader(
-            train_dataset, shuffle=True, collate_fn=default_data_collator, batch_size=args.batch_size)
+            train_dataset, shuffle=True, collate_fn=default_data_collator, batch_size=args.batch_size, drop_last=True)
 
         print(f"--- Starting epoch {epoch} ---")
         for batch in train_dataloader:
@@ -233,8 +277,12 @@ def main():
 
             # run forward pass and compute loss
             model.zero_grad(set_to_none=True)
-            logits, loss = model.forward(
-                input_ids=batch["input_ids"], labels=batch["labels"])
+            logits, loss, final_hidden_state = model.forward(
+                input_ids=batch["input_ids"], labels=batch["labels"], hidden_state=hidden_state)
+
+            if final_hidden_state is not None:
+                # detach the hidden state to avoid backpropagating through all batches
+                hidden_state = repackage_hidden(final_hidden_state)
 
             predicted_tokens += args.batch_size * (model.block_size - 1)
 
@@ -248,8 +296,13 @@ def main():
 
             if current_step % args.logging_steps == 0:
                 ppl = torch.exp(loss)
+                
+                # log stuff
+                logs = {"global_step": current_step, "epoch": epoch, "loss": loss.item(), "ppl": ppl.item(), "predicted_tokens": predicted_tokens}
+                wandb_logger.log(logs, step=current_step)
+                
                 print(
-                    f"step: {current_step:>8} | batch loss: {loss.item():.4f} | batch ppl: {ppl.item():.4f} | predicted tokens: {predicted_tokens:>10} | step time: {delta:.2f}ms")
+                    f"step: {current_step:>8} | loss: {loss.item():.4f} | ppl: {ppl.item():.4f} | predicted tokens: {predicted_tokens:>10} | step time: {delta:.2f}ms")
 
             if current_step % args.eval_steps == 0:
                 eval_results = evaluate(model, validation_dataset, args)
@@ -271,12 +324,12 @@ def main():
     # -------------------- saving and clean-up --------------------
 
     # save model, tokenizer, args
-    if args.save_dir is not None:
+    if args.output_dir is not None:
         # make sure output dir exists
-        os.makedirs(args.save_dir, exist_ok=True)
-        model.save_model(args.save_dir)
+        os.makedirs(args.output_dir, exist_ok=True)
+        model.save_model(args.output_dir)
 
-        # TODO(mm): save tokenizer and args as well
+        # TODO(mm): save tokenizer, config, and args as well
 
     # -------------------- end saving and clean-up --------------------
 
