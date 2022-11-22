@@ -10,4 +10,5 @@ class RnnConfig(LanguageModelConfig):
     num_layers: int = None
     cell_type: str = None
     add_bias: bool = None
+    embedding_dropout: float = None
     dropout: float = None
