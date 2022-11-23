@@ -1,7 +1,9 @@
+import os
 from pathlib import Path
 import pytest
 import shutil
 
+from languagemodels import TokenizerFactory
 from languagemodels.tokenization import (
     RegexTokenizationFunction,
     IpaTokenizationFunction,
@@ -10,23 +12,27 @@ from languagemodels.tokenization import (
 
 MODEL_MAXLEN = 15
 
-@pytest.fixture
-def tokenizer_save_path(scope='session'):
-    path = Path("tests/tmp/saved_tokenizers")
-    if not path.exists():
-        path.mkdir(parents=True)
-    return  path / "test_tokenizer.json"
+@pytest.fixture(scope='session')
+def base_path():
+    return os.path.dirname(__file__)
 
-@pytest.fixture
-def train_data_path_regex(scope='session'):
-    path = Path("tests/data/train_data_regex_tokenizer")
-    assert path.exists()
+@pytest.fixture(scope='session')
+def tokenizer_save_path(base_path):
+    path = os.path.join(base_path, "tmp/saved_tokenizers")
+    if not os.path.exists(path):
+        os.makedirs(path)
+    return  os.path.join(path, "test_tokenizer.json")
+
+@pytest.fixture(scope='session')
+def train_data_path_regex(base_path):
+    path = os.path.join(base_path, "data/train_data_regex_tokenizer")
+    assert os.path.exists(path)
     return path
 
-@pytest.fixture
-def train_data_path_ipa(scope='session'):
-    path = Path("tests/data/train_data_ipa_tokenizer")
-    assert path.exists()
+@pytest.fixture(scope='session')
+def train_data_path_ipa(base_path):
+    path = os.path.join(base_path, "data/train_data_ipa_tokenizer")
+    assert os.path.exists(path)
     return path
 
 @pytest.fixture
@@ -49,7 +55,6 @@ def ipa_tokenizer(ipa_tok_function, train_data_path_ipa):
     tokenizer = CharacterBasedTokenizer(model_max_length=15, \
         tokenization_function=ipa_tok_function)
     tokenizer.train(train_data_path_ipa)
-    print(tokenizer.characters)
     return tokenizer
 
 @pytest.mark.parametrize("text, expected_mask", [
@@ -69,31 +74,43 @@ def test_regex_tokenizer(regex_tokenizer, text, expected_mask):
         assert len(output.input_ids) == MODEL_MAXLEN
         assert output.attention_mask == expected_mask
 
-@pytest.mark.parametrize("text", [
-    "ˈnoɹθ", "ˌwɪnd", "wəz", "əˈblaɪʒ", "tɪ", "kənˈfɛs", "ðət"
-])
-def test_save_load_ipa_tokenizer(ipa_tokenizer, tokenizer_save_path, text):
-    tokenized_pre = ipa_tokenizer.encode_batch([text])
+def test_save_load_ipa_tokenizer(ipa_tokenizer, tokenizer_save_path):
+    text = ["ˈnoɹθ", "ˌwɪnd", "wəz", "əˈblaɪʒ", "tɪ", "kənˈfɛs", "ðət"]
+    tokenized_pre = ipa_tokenizer.encode_batch(text)
     ipa_tokenizer.save(tokenizer_save_path)
-    del ipa_tokenizer
-    ipa_tokenizer = CharacterBasedTokenizer.from_file(tokenizer_save_path)
-    tokenized_post = ipa_tokenizer.encode_batch([text])
+    new_ipa_tokenizer = CharacterBasedTokenizer.from_file(tokenizer_save_path)
+    tokenized_post = new_ipa_tokenizer.encode_batch(text)
     for tok_pre, tok_post in zip(tokenized_pre, tokenized_post):
         assert tok_pre.input_ids == tok_post.input_ids
         assert tok_pre.attention_mask == tok_post.attention_mask
 
-@pytest.mark.parametrize("text", [
-    "ol'l'i", "polkkov'n'ikku"
-])
-def test_save_load_regex_tokenizer(regex_tokenizer, tokenizer_save_path, text):
-    tokenized_pre = regex_tokenizer.encode_batch([text])
+def test_save_load_regex_tokenizer(regex_tokenizer, tokenizer_save_path):
+    text = ["ol'l'i", "polkkov'n'ikku"]
+    tokenized_pre = regex_tokenizer.encode_batch(text)
     regex_tokenizer.save(tokenizer_save_path)
-    del regex_tokenizer
-    regex_tokenizer = CharacterBasedTokenizer.from_file(tokenizer_save_path)
-    tokenized_post = regex_tokenizer.encode_batch([text])
+    new_regex_tokenizer = CharacterBasedTokenizer.from_file(tokenizer_save_path)
+    tokenized_post = new_regex_tokenizer.encode_batch(text)
     for tok_pre, tok_post in zip(tokenized_pre, tokenized_post):
         assert tok_pre.input_ids == tok_post.input_ids
         assert tok_pre.attention_mask == tok_post.attention_mask
+
+
+def test_tokenizer_factory(regex_tokenizer, ipa_tokenizer, tokenizer_save_path):
+    # regex tokenizer
+    chars_pre = regex_tokenizer.characters
+    regex_tokenizer.save(tokenizer_save_path)
+    new_regex_tokenizer = TokenizerFactory.get_tokenizer(tokenizer_type='char-tokenizer', \
+        tokenizer_path=tokenizer_save_path)
+    chars_post = new_regex_tokenizer.characters
+    assert chars_post == chars_pre
+
+    chars_pre = ipa_tokenizer.characters
+    ipa_tokenizer.save(tokenizer_save_path)
+    new_ipa_tokenizer = TokenizerFactory.get_tokenizer(tokenizer_type='char-tokenizer', \
+        tokenizer_path=tokenizer_save_path)
+    chars_post = new_ipa_tokenizer.characters
+    assert chars_post == chars_pre
+
 
     #cleanup
     shutil.rmtree(Path("tests/tmp/"))

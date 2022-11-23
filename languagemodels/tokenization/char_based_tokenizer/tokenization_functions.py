@@ -44,7 +44,6 @@ class IpaTokenizationFunction(CharTokenizationFunction):
     name = "ipa"
 
     def __call__(self, text) -> List[str]:
-        print(text)
         return ipa2tokens(text)
 
     def get_config(self) -> Dict[str, str]:

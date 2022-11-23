@@ -85,7 +85,6 @@ class CharacterBasedTokenizer(PreTrainedTokenizer):
 
     def _tokenize(self, text: str) -> List[str]:
         tokenized = self.tokenization_function(text)
-        print(tokenized)
         tokenized = [self.bos_token] + tokenized + [self.eos_token]
         return tokenized
 
@@ -125,12 +124,20 @@ class CharacterBasedTokenizer(PreTrainedTokenizer):
 
     def encode_batch(self, input, add_special_tokens=False):
         # TODO (js): add word offesets and word ids
-        encoded = [
+        input = [inp.split() for inp in input]
+        input = list(itertools.chain.from_iterable(input))
+        encoded_batch = [
             # Tokenizer.batch_decode_plus and the like are deprecated.
             self(inp, add_special_tokens=add_special_tokens, 
             padding='max_length', truncation=True) for inp in input
         ]
-        return encoded
+        for enc in encoded_batch:
+            enc["ids"] = enc.pop("input_ids")
+            enc["tokens"] = [self._convert_id_to_token(i) for i in enc["ids"]]
+            enc["word_ids"] = [1 if i != self.pad_token_id else 0 for i in enc["ids"]]
+            offsets = [(idx, idx) if i != self.pad_token_id else (0, 0) for idx, i in enumerate(enc["ids"])]
+            enc["offsets"] = offsets
+        return encoded_batch
 
     def get_special_tokens_mask(
         self,
