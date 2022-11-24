@@ -8,6 +8,9 @@
 # for LSV V100 and RTX server
 FROM nvcr.io/nvidia/pytorch:21.07-py3
 
+# Workstation
+# FROM nvcr.io/nvidia/pytorch:19.10-py3
+
 # Install additional programs
 RUN apt update && \
     apt install -y build-essential \
@@ -33,6 +36,7 @@ RUN python3 -m pip install deepspeed
 RUN python3 -m pip install datasets==2.4.0
 RUN python3 -m pip install wandb
 RUN python3 -m pip install sklearn
+RUN python3 -m pip install lingpy --user
 
 # Install additional dependencies
 RUN python3 -m pip install autopep8
