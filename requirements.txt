@@ -10,3 +10,4 @@ ipywidgets
 datasets==2.4.0
 tokenizers==0.12.1
 transformers==4.18.0
+lingpy

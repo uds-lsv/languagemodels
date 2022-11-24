@@ -11,8 +11,10 @@ TOKENIZERS = {
 class TokenizerFactory():
 
     @classmethod
-    def get_tokenizer(cls, tokenizer_type="pretrained-tokenizer", tokenizer_name=None, tokenizer_path=None, pre_trained=False, \
+    def get_tokenizer(cls, tokenizer_type, tokenizer_name=None, tokenizer_path=None, \
         **kwargs) -> Tokenizer:
+        
+        assert tokenizer_type in TOKENIZERS
         
         tokenizer_cls = TOKENIZERS[tokenizer_type]
 
