@@ -1,6 +1,6 @@
 import argparse
 import os
-import time
+from typing import List, Union
 
 from tokenizers import Tokenizer
 from tokenizers.models import WordLevel
@@ -9,10 +9,33 @@ from tokenizers.pre_tokenizers import Whitespace
 from tokenizers.processors import TemplateProcessing
 
 
+from languagemodels.tokenization import (
+    CharacterBasedTokenizer, 
+    available_tokenization_functions,
+    get_tokenization_function
+)
+
+
 SUPPORTED_TOKKENIZERS = [
-    "word-level"
+    "word-level", "character-level"
 ]
 
+
+def _train_character_level_tokenizer(files, tokenization_function):
+    """Train a word-level tokenizer on a list of files
+
+    Args:
+        files (List[str]): list of files on which the tokenizer will be trained 
+    Returns:
+        Tokenizer: a tokenizer
+    """
+    assert args.tokenization_function in available_tokenization_functions()
+    
+    tok_function = get_tokenization_function(args.tokenization_function)
+    tokenizer = CharacterBasedTokenizer(tokenization_function=tok_function, model_max_length=25)
+    tokenizer.train(files)
+
+    return tokenizer
 
 def _train_word_level_tokenizer(vocab_size, files):
     """Train a word-level tokenizer on a list of files
@@ -40,7 +63,6 @@ def _train_word_level_tokenizer(vocab_size, files):
         single="<s> $A </s>",
         special_tokens=[(t, tokenizer.token_to_id(t)) for t in ["<s>", "</s>"]]
     )
-
     return tokenizer
 
 
@@ -55,6 +77,8 @@ if __name__ == '__main__':
                         help="file type of input files, e.g. .raw")
     parser.add_argument('--vocab-size', type=int, default=10000,
                         help="the tokenizer's vocabulary size")
+    parser.add_argument('--tokenization-function', type=str, default="ged",
+                        help="a function to split")
     parser.add_argument('--output-dir', type=str,
                         help="where to save the tokenizer")
     parser.add_argument('--tokenizer-name', type=str,
@@ -82,11 +106,19 @@ if __name__ == '__main__':
     if args.tokenizer_type == "word-level":
         print("Training word-level tokenizer ...")
         tokenizer = _train_word_level_tokenizer(args.vocab_size, files)
+    elif args.tokenizer_type == "character-level":
+        print("Training character-level tokenizer ...")
+        tokenizer = _train_character_level_tokenizer(args.input_files_dir, args.tokenization_function)
 
     # print some tokenized and encoded data
     encoded_data = tokenizer.encode_batch(data[:5])
     for idx, encoded_line in enumerate(encoded_data):
-        print(encoded_line.tokens, encoded_line.ids)
+        print(encoded_line)
+        print(encoded_line.ids)
+        print(encoded_line.word_ids)
+        print(encoded_line.attention_mask)
+        print(encoded_line.tokens)
+        print(encoded_line.offsets)
 
     # save tokenizer
     tokenizer_name = f"tokenizer-{args.tokenizer_name}.json"
