@@ -10,7 +10,7 @@ import torch
 from torch.utils.data.dataloader import DataLoader
 from transformers import default_data_collator
 
-from lm_factory import LMFactory
+from languagemodels import LMFactory, TokenizerFactory
 from logging_utils import WandbLogger
 
 from utils import set_seed, get_timestamp, create_dir
@@ -36,6 +36,8 @@ def parse_args():
 
     # tokenizer args
     parser.add_argument('--tokenizer_path', type=str,
+                        help="path of the pre-trained tokenizer to use")
+    parser.add_argument('--tokenizer_type', type=str, default="pretrained-tokenizer",
                         help="path of the pre-trained tokenizer to use")
     parser.add_argument('--tokenizer_name', type=str,
                         help="name the pre-trained tokenizer to use (from the huggingface hub)")
@@ -139,8 +141,11 @@ def main():
     # -------------------- model and tokenizer --------------------
 
     # load tokenizer
-    tokenizer = Tokenizer.from_pretrained(
-        args.tokenizer_name) if args.tokenizer_name is not None else Tokenizer.from_file(args.tokenizer_path)
+    # tokenizer = Tokenizer.from_pretrained(
+    #     args.tokenizer_name) if args.tokenizer_name is not None else Tokenizer.from_file(args.tokenizer_path)
+    
+    tokenizer = TokenizerFactory.get_tokenizer(tokenizer_type=args.tokenizer_type, tokenizer_name=args.tokenizer_name, \
+        tokenizer_path=args.tokenizer_path)
 
     # load model
     model, model_config = LMFactory.get_lm(model_type=args.model_type, config_name_or_path=args.config_name_or_path,
