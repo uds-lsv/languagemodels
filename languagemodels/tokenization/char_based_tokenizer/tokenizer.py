@@ -134,9 +134,11 @@ class CharacterBasedTokenizer(PreTrainedTokenizer):
         for enc in encoded_batch:
             enc["ids"] = enc.pop("input_ids")
             enc["tokens"] = [self._convert_id_to_token(i) for i in enc["ids"]]
-            enc["word_ids"] = [1 if i != self.pad_token_id else 0 for i in enc["ids"]]
-            offsets = [(idx, idx) if i != self.pad_token_id else (0, 0) for idx, i in enumerate(enc["ids"])]
-            enc["offsets"] = offsets
+            enc["word_ids"] = [i if id != self.pad_token_id else 0 for i, id in enumerate(enc["ids"])]
+            enc["offsets"] = [(idx, idx) if i != self.pad_token_id else (0, 0) \
+                for idx, i in enumerate(enc["ids"])]
+            enc["special_tokens_mask"] = self.get_special_tokens_mask(enc["ids"], \
+                already_has_special_tokens=True)
         return encoded_batch
 
     def get_special_tokens_mask(
