@@ -309,7 +309,8 @@ def main():
                 
                 # log stuff
                 logs = {"global_step": current_step, "epoch": epoch, "loss": loss.item(), "ppl": ppl.item(), "predicted_tokens": predicted_tokens}
-                wandb_logger.log(logs, step=current_step)
+                if os.environ["WANDB_DISABLED"] == "false":
+                    wandb_logger.log(logs, step=current_step)
                 
                 print(
                     f"step: {current_step:>8} | loss: {loss.item():.4f} | ppl: {ppl.item():.4f} | predicted tokens: {predicted_tokens:>10} | step time: {delta:.2f}ms")
