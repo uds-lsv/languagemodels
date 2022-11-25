@@ -9,6 +9,7 @@ from tokenizers import Tokenizer
 import torch
 from torch.utils.data.dataloader import DataLoader
 from transformers import default_data_collator
+from transformers.tokenization_utils_base import BatchEncoding
 
 from languagemodels import LMFactory, TokenizerFactory
 from logging_utils import WandbLogger
@@ -165,14 +166,18 @@ def main():
                        "tokens": [], "attention_mask": [], "special_tokens_mask": [], "word_ids": []}
         outputs = tokenizer.encode_batch(
             sequences["text"])  # returns an Encoding object (https://huggingface.co/docs/tokenizers/v0.13.0/en/api/encoding#tokenizers.Encoding)
-
-        for output in outputs:
-            output_dict["input_ids"].append(output.ids)
-            output_dict["tokens"].append(output.tokens)
-            output_dict["word_ids"].append(output.word_ids)
-            output_dict["attention_mask"].append(output.attention_mask)
-            output_dict["special_tokens_mask"].append(
-                output.special_tokens_mask)
+        
+        # Output of CharacterBasedTokenizer.encode_batch is already in the correct format
+        if isinstance(outputs, BatchEncoding):
+            return outputs
+        else:
+            for output in outputs:
+                output_dict["input_ids"].append(output.ids)
+                output_dict["tokens"].append(output.tokens)
+                output_dict["word_ids"].append(output.word_ids)
+                output_dict["attention_mask"].append(output.attention_mask)
+                output_dict["special_tokens_mask"].append(
+                    output.special_tokens_mask)
 
         return output_dict
 

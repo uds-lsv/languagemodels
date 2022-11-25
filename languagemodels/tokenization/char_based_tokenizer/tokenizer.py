@@ -123,23 +123,38 @@ class CharacterBasedTokenizer(PreTrainedTokenizer):
             self._vocab_int_to_str[len(self._vocab_int_to_str)] = c
 
     def encode_batch(self, input, add_special_tokens=False):
-        # TODO (js): add word offesets and word ids
-        input = [inp.split() for inp in input]
-        input = list(itertools.chain.from_iterable(input))
-        encoded_batch = [
-            # Tokenizer.batch_decode_plus and the like are deprecated.
-            self(inp, add_special_tokens=add_special_tokens, 
-            padding='max_length', truncation=True) for inp in input
-        ]
-        for enc in encoded_batch:
-            enc["ids"] = enc.pop("input_ids")
-            enc["tokens"] = [self._convert_id_to_token(i) for i in enc["ids"]]
-            enc["word_ids"] = [i if id != self.pad_token_id else 0 for i, id in enumerate(enc["ids"])]
-            enc["offsets"] = [(idx, idx) if i != self.pad_token_id else (0, 0) \
-                for idx, i in enumerate(enc["ids"])]
-            enc["special_tokens_mask"] = self.get_special_tokens_mask(enc["ids"], \
+        # Tokenizer.batch_decode_plus and the like are deprecated.
+        encodings = self(input, add_special_tokens=add_special_tokens, 
+            padding='max_length', truncation=True)
+        self._add_items_to_encodings(encodings)
+        return encodings
+
+    def _add_items_to_encodings(self, encodings):
+        """ Adds tokens, word ids, word offsets and the special tokens mask 
+            to a BatchEncoding object
+        """
+        encodings_ids = []
+        encodings_tokens = []
+        encodings_word_ids = []
+        encodings_word_offsets = []
+        encodings_special_tokens_masks = []
+        for ids in encodings["input_ids"]:
+            tokens = [self._convert_id_to_token(i) for i in ids]
+            word_ids = [i if id != self.pad_token_id else 0 for i, id in enumerate(ids)]
+            word_offsets = [(idx, idx) if i != self.pad_token_id else (0, 0) \
+                for idx, i in enumerate(ids)]
+            special_tokens_masks = self.get_special_tokens_mask(ids, \
                 already_has_special_tokens=True)
-        return encoded_batch
+            encodings_ids.append(ids)
+            encodings_tokens.append(tokens)
+            encodings_word_ids.append(word_ids)
+            encodings_word_offsets.append(word_offsets)
+            encodings_special_tokens_masks.append(special_tokens_masks)
+
+        encodings["tokens"] = encodings_tokens 
+        encodings["word_ids"] = encodings_word_ids
+        encodings["offsets"] = encodings_word_offsets
+        encodings["special_tokens_mask"] = encodings_special_tokens_masks
 
     def get_special_tokens_mask(
         self,

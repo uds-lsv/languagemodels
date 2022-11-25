@@ -57,22 +57,11 @@ def ipa_tokenizer(ipa_tok_function, train_data_path_ipa):
     tokenizer.train(train_data_path_ipa)
     return tokenizer
 
-@pytest.mark.parametrize("text, expected_mask", [
-    (
-        "ol'l'i", 
-        [1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-    ),
-    (
-        "polkkov'n'ikku",
-        [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0]
-    )
-    
-])
-def test_regex_tokenizer(regex_tokenizer, text, expected_mask):
-    tokenized = regex_tokenizer.encode_batch([text])
-    for output in tokenized:
-        assert len(output.ids) == MODEL_MAXLEN
-        assert output.attention_mask == expected_mask
+def test_regex_tokenizer(regex_tokenizer):
+    text = ["kaa", "see", "see", "tahab", "rohkem", "sooea", "saada", "see", "ei", "tule"]
+    tokenized = regex_tokenizer.encode_batch(text)
+    for output in tokenized["input_ids"]:
+        assert len(output) == MODEL_MAXLEN
 
 def test_save_load_ipa_tokenizer(ipa_tokenizer, tokenizer_save_path):
     text = ["ˈnoɹθ", "ˌwɪnd", "wəz", "əˈblaɪʒ", "tɪ", "kənˈfɛs", "ðət"]
@@ -80,9 +69,10 @@ def test_save_load_ipa_tokenizer(ipa_tokenizer, tokenizer_save_path):
     ipa_tokenizer.save(tokenizer_save_path)
     new_ipa_tokenizer = CharacterBasedTokenizer.from_file(tokenizer_save_path)
     tokenized_post = new_ipa_tokenizer.encode_batch(text)
-    for tok_pre, tok_post in zip(tokenized_pre, tokenized_post):
-        assert tok_pre.ids == tok_post.ids
-        assert tok_pre.attention_mask == tok_post.attention_mask
+    for tok_pre, tok_post in zip(tokenized_pre["input_ids"], tokenized_post["input_ids"]):
+        assert tok_pre == tok_post
+    for tok_pre, tok_post in zip(tokenized_pre["attention_mask"], tokenized_post["attention_mask"]):
+        assert tok_pre == tok_post
 
 def test_save_load_regex_tokenizer(regex_tokenizer, tokenizer_save_path):
     text = ["ol'l'i", "polkkov'n'ikku"]
@@ -90,9 +80,10 @@ def test_save_load_regex_tokenizer(regex_tokenizer, tokenizer_save_path):
     regex_tokenizer.save(tokenizer_save_path)
     new_regex_tokenizer = CharacterBasedTokenizer.from_file(tokenizer_save_path)
     tokenized_post = new_regex_tokenizer.encode_batch(text)
-    for tok_pre, tok_post in zip(tokenized_pre, tokenized_post):
-        assert tok_pre.ids == tok_post.ids
-        assert tok_pre.attention_mask == tok_post.attention_mask
+    for tok_pre, tok_post in zip(tokenized_pre["input_ids"], tokenized_post["input_ids"]):
+        assert tok_pre == tok_post
+    for tok_pre, tok_post in zip(tokenized_pre["attention_mask"], tokenized_post["attention_mask"]):
+        assert tok_pre == tok_post
 
 
 def test_tokenizer_factory(regex_tokenizer, ipa_tokenizer, tokenizer_save_path):
