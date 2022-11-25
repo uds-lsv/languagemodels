@@ -1,10 +1,10 @@
 from tokenizers import Tokenizer
 
-from languagemodels.tokenization import CharacterBasedTokenizer
+from languagemodels.tokenization import CharLevelTokenizer
 
 
 TOKENIZERS = {
-    "char-tokenizer": CharacterBasedTokenizer,
+    "char-tokenizer": CharLevelTokenizer,
     "pretrained-tokenizer": Tokenizer
 }
 

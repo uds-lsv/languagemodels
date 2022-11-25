@@ -8,7 +8,7 @@ from pathlib import Path
 from transformers.tokenization_utils import AddedToken, PreTrainedTokenizer
 from typing import Dict, List, Union, Optional
 
-from languagemodels.tokenization.char_based_tokenizer.tokenization_functions import (
+from languagemodels.tokenization.char_level_tokenizer.char_level_tokenization_functions import (
     CharTokenizationFunction,
     IpaTokenizationFunction,
     RegexTokenizationFunction
@@ -19,17 +19,18 @@ TOKENIZATION_FUNCTIONS = {
     "regex": RegexTokenizationFunction
 }
 
-class CharacterBasedTokenizer(PreTrainedTokenizer):
+class CharLevelTokenizer(PreTrainedTokenizer):
     def __init__(self, model_max_length: int, tokenization_function: CharTokenizationFunction, \
          characters=None, **kwargs):
-        """Character tokenizer for Hugging Face transformers.
+        """Simple character tokenizer.
         Args:
             characters (Sequence[str]): List of desired characters. Any character which
                 is not included in this list will be replaced by a special token called
                 <unk> with id=6.
                 an id (starting at 7) will be assigned to each character.
             model_max_length (int): Model maximum sequence length.
-            char_match (str): Regular expression defining what is to be understood as a character.
+            tokenization_function: Tokenization function called in the 
+                CharLevelTokenizer.tokenize() method
         """
         self.model_max_length = model_max_length
         self.tokenization_function = tokenization_function
@@ -211,7 +212,7 @@ class CharacterBasedTokenizer(PreTrainedTokenizer):
             json.dump(cfg, f, indent=4)
 
     @classmethod
-    def from_file(cls, path, **kwargs) -> "CharacterBasedTokenizer":
+    def from_file(cls, path, **kwargs) -> "CharLevelTokenizer":
         cfg_file = Path(path)
         with open(cfg_file) as f:
             cfg = json.load(f)

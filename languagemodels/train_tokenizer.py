@@ -7,10 +7,11 @@ from tokenizers.models import WordLevel
 from tokenizers.trainers import WordLevelTrainer
 from tokenizers.pre_tokenizers import Whitespace
 from tokenizers.processors import TemplateProcessing
+from transformers.tokenization_utils_base import BatchEncoding
 
 
 from languagemodels.tokenization import (
-    CharacterBasedTokenizer, 
+    CharLevelTokenizer, 
     available_tokenization_functions,
     get_tokenization_function
 )
@@ -32,7 +33,7 @@ def _train_character_level_tokenizer(files, tokenization_function):
     assert args.tokenization_function in available_tokenization_functions()
     
     tok_function = get_tokenization_function(args.tokenization_function)
-    tokenizer = CharacterBasedTokenizer(tokenization_function=tok_function, model_max_length=25)
+    tokenizer = CharLevelTokenizer(tokenization_function=tok_function, model_max_length=25)
     tokenizer.train(files)
 
     return tokenizer
@@ -112,13 +113,16 @@ if __name__ == '__main__':
 
     # print some tokenized and encoded data
     encoded_data = tokenizer.encode_batch(data[:5])
-    for idx, encoded_line in enumerate(encoded_data):
-        print(encoded_line)
-        print(encoded_line.ids)
-        print(encoded_line.word_ids)
-        print(encoded_line.attention_mask)
-        print(encoded_line.tokens)
-        print(encoded_line.offsets)
+    if isinstance(encoded_data, BatchEncoding):
+        print(encoded_data)
+    else:
+        for idx, encoded_line in enumerate(encoded_data):
+            print(encoded_line)
+            print(encoded_line.ids)
+            print(encoded_line.word_ids)
+            print(encoded_line.attention_mask)
+            print(encoded_line.tokens)
+            print(encoded_line.offsets)
 
     # save tokenizer
     tokenizer_name = f"tokenizer-{args.tokenizer_name}.json"

@@ -1,7 +1,7 @@
 from typing import List
 
-from .char_based_tokenizer.tokenizer import CharacterBasedTokenizer
-from .char_based_tokenizer.tokenization_functions import (
+from .char_level_tokenizer.char_level_tokenizer import CharLevelTokenizer
+from .char_level_tokenizer.char_level_tokenization_functions import (
     RegexTokenizationFunction,
     IpaTokenizationFunction,
     CharTokenizationFunction

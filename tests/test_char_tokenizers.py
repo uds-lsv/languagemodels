@@ -7,7 +7,7 @@ from languagemodels import TokenizerFactory
 from languagemodels.tokenization import (
     RegexTokenizationFunction,
     IpaTokenizationFunction,
-    CharacterBasedTokenizer
+    CharLevelTokenizer
 )
 
 MODEL_MAXLEN = 15
@@ -45,14 +45,14 @@ def ipa_tok_function():
 
 @pytest.fixture
 def regex_tokenizer(regex_tok_function, train_data_path_regex):
-    tokenizer = CharacterBasedTokenizer(model_max_length=15, \
+    tokenizer = CharLevelTokenizer(model_max_length=15, \
         tokenization_function=regex_tok_function)
     tokenizer.train(train_data_path_regex)
     return tokenizer
 
 @pytest.fixture
 def ipa_tokenizer(ipa_tok_function, train_data_path_ipa):
-    tokenizer = CharacterBasedTokenizer(model_max_length=15, \
+    tokenizer = CharLevelTokenizer(model_max_length=15, \
         tokenization_function=ipa_tok_function)
     tokenizer.train(train_data_path_ipa)
     return tokenizer
@@ -67,7 +67,7 @@ def test_save_load_ipa_tokenizer(ipa_tokenizer, tokenizer_save_path):
     text = ["ˈnoɹθ", "ˌwɪnd", "wəz", "əˈblaɪʒ", "tɪ", "kənˈfɛs", "ðət"]
     tokenized_pre = ipa_tokenizer.encode_batch(text)
     ipa_tokenizer.save(tokenizer_save_path)
-    new_ipa_tokenizer = CharacterBasedTokenizer.from_file(tokenizer_save_path)
+    new_ipa_tokenizer = CharLevelTokenizer.from_file(tokenizer_save_path)
     tokenized_post = new_ipa_tokenizer.encode_batch(text)
     for tok_pre, tok_post in zip(tokenized_pre["input_ids"], tokenized_post["input_ids"]):
         assert tok_pre == tok_post
@@ -78,7 +78,7 @@ def test_save_load_regex_tokenizer(regex_tokenizer, tokenizer_save_path):
     text = ["ol'l'i", "polkkov'n'ikku"]
     tokenized_pre = regex_tokenizer.encode_batch(text)
     regex_tokenizer.save(tokenizer_save_path)
-    new_regex_tokenizer = CharacterBasedTokenizer.from_file(tokenizer_save_path)
+    new_regex_tokenizer = CharLevelTokenizer.from_file(tokenizer_save_path)
     tokenized_post = new_regex_tokenizer.encode_batch(text)
     for tok_pre, tok_post in zip(tokenized_pre["input_ids"], tokenized_post["input_ids"]):
         assert tok_pre == tok_post
