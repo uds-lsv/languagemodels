@@ -24,8 +24,15 @@ class RnnLM(LanguageModel):
 
         # the initial hidden state of time step 0
         # shape is: (num_layers, batch_size, hidden_dim). We use 1 as a placeholder for the bsz and expand it during the forward pass
-        self.initial_hidden_state = nn.Parameter(
-            torch.zeros(self.num_layers, 1, self.hidden_dim))
+        # the LSTM cell needs an additional context state
+        if self.cell_type == "lstm":
+            self.initial_hidden_state = (
+                nn.Parameter(torch.zeros(self.num_layers, 1, self.hidden_dim)),
+                nn.Parameter(torch.zeros(self.num_layers, 1, self.hidden_dim))
+            )
+        else:
+            self.initial_hidden_state = nn.Parameter(
+                torch.zeros(self.num_layers, 1, self.hidden_dim))
 
         # the emedding matrix
         self.wte = nn.Embedding(
@@ -62,7 +69,6 @@ class RnnLM(LanguageModel):
                 batch_first=True,
                 dropout=self.dropout,
                 bidirectional=False,
-                proj_size=0
             )
         else:
             raise NotImplementedError(
@@ -100,13 +106,19 @@ class RnnLM(LanguageModel):
 
         if hidden_state is None:
             # expand the initial hidden state to have the correct batch_size
-            hidden_state = self.initial_hidden_state.expand(
-                (-1, input_ids.shape[0], -1)).contiguous()
+            if self.cell_type == "lstm":
+                hidden_state = (
+                    self.initial_hidden_state[0].expand((-1, input_ids.shape[0], -1)).contiguous(),
+                    self.initial_hidden_state[1].expand((-1, input_ids.shape[0], -1)).contiguous()
+                )
+            else:
+                hidden_state = self.initial_hidden_state.expand(
+                    (-1, input_ids.shape[0], -1)).contiguous()
 
         # outputs.shape = (batch_size, block_size, hidden_dim) contains encoder outputs for every timestep t
         # final_hidden_state.shape = (num_layers, batch_size, hidden_dim) contains the final hidden state per layer for each sequence in the batch
         outputs, final_hidden_state = self.encoder(embeddings, hidden_state)
-
+        
         # decode predictions by applying lm_head to the hidden state of every token
         logits = self.lm_head(outputs)
 
