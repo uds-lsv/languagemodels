@@ -25,14 +25,8 @@ class RnnLM(LanguageModel):
         # the initial hidden state of time step 0
         # shape is: (num_layers, batch_size, hidden_dim). We use 1 as a placeholder for the bsz and expand it during the forward pass
         # the LSTM cell needs an additional context state
-        if self.cell_type == "lstm":
-            self.initial_hidden_state = (
-                nn.Parameter(torch.zeros(self.num_layers, 1, self.hidden_dim)),
-                nn.Parameter(torch.zeros(self.num_layers, 1, self.hidden_dim))
-            )
-        else:
-            self.initial_hidden_state = nn.Parameter(
-                torch.zeros(self.num_layers, 1, self.hidden_dim))
+
+        self.initial_hidden_state = self._init_hidden()
 
         # the emedding matrix
         self.wte = nn.Embedding(
@@ -78,6 +72,23 @@ class RnnLM(LanguageModel):
         # TODO(mm): support tying weights
         self.lm_head = nn.Linear(self.hidden_dim, self.vocab_size)
 
+    def _init_hidden(self):
+        if self.cell_type == "lstm":
+            self.h_0 = nn.Parameter(torch.zeros(self.num_layers, 1, self.hidden_dim))
+            self.c_0 = nn.Parameter(torch.zeros(self.num_layers, 1, self.hidden_dim))
+            return (self.h_0, self.c_0)
+        else:
+            return nn.Parameter(torch.zeros(self.num_layers, 1, self.hidden_dim))
+
+    def _expand_hidden(self, batch_size: int):
+        if self.cell_type == "lstm":
+            return (
+                self.h_0.expand((-1, batch_size, -1)).contiguous(),
+                self.c_0.expand((-1, batch_size, -1)).contiguous() 
+            )
+        else:
+            return self.initial_hidden_state.expand((-1, batch_size, -1)).contiguous()
+
     @classmethod
     def load_model(cls, config, pre_trained=False, model_name_or_path=None):
         # TODO(mm): move this functionality to the parent class
@@ -106,14 +117,7 @@ class RnnLM(LanguageModel):
 
         if hidden_state is None:
             # expand the initial hidden state to have the correct batch_size
-            if self.cell_type == "lstm":
-                hidden_state = (
-                    self.initial_hidden_state[0].expand((-1, input_ids.shape[0], -1)).contiguous(),
-                    self.initial_hidden_state[1].expand((-1, input_ids.shape[0], -1)).contiguous()
-                )
-            else:
-                hidden_state = self.initial_hidden_state.expand(
-                    (-1, input_ids.shape[0], -1)).contiguous()
+            hidden_state = self._expand_hidden(input_ids.shape[0])
 
         # outputs.shape = (batch_size, block_size, hidden_dim) contains encoder outputs for every timestep t
         # final_hidden_state.shape = (num_layers, batch_size, hidden_dim) contains the final hidden state per layer for each sequence in the batch
