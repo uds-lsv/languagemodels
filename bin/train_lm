@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 import argparse
 import time
 from itertools import chain
@@ -12,9 +14,9 @@ from transformers import default_data_collator
 from transformers.tokenization_utils_base import BatchEncoding
 
 from languagemodels import LMFactory, TokenizerFactory
-from logging_utils import WandbLogger
+from languagemodels.logging_utils import WandbLogger
 
-from utils import set_seed, get_timestamp, create_dir
+from languagemodels.utils import set_seed, get_timestamp, create_dir
 
 
 def parse_args():
@@ -107,9 +109,8 @@ def evaluate(model, validation_dataset, args):
 
 def main():
     args = parse_args()
-
     # -------------------- setup --------------------
-
+    print("here2")
     set_seed(args.seed)
     TIMESTAMP = get_timestamp()
 
