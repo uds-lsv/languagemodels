@@ -20,10 +20,6 @@ RUN apt update && \
     tmux && \
     rm -rf /var/lib/apt/lists
 
-# ADD . /workspace
-
-COPY . .
-
 # Update pip 
 RUN python3 -m pip install --upgrade pip
 
@@ -61,5 +57,5 @@ RUN chown -R ${USER_UID}:${USER_GID} /opt/conda/bin/
 WORKDIR /languagemodels
 
 # TODO: install the package in development mode when run
-CMD ["/bin/bash"]
-# CMD ["/opt/conda/bin/pip" "install", "-e", "."]
+# CMD ["/bin/bash"]
+CMD /bin/bash -C ./docker_setup.sh ; /bin/bash  

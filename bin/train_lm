@@ -110,7 +110,7 @@ def evaluate(model, validation_dataset, args):
 def main():
     args = parse_args()
     # -------------------- setup --------------------
-    print("here2")
+
     set_seed(args.seed)
     TIMESTAMP = get_timestamp()
 
