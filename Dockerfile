@@ -20,23 +20,8 @@ RUN apt update && \
     tmux && \
     rm -rf /var/lib/apt/lists
 
-# Install dependencies 
+# Update pip 
 RUN python3 -m pip install --upgrade pip
-RUN python3 -m pip install wheel
-RUN python3 -m pip install numpy
-RUN python3 -m pip install pandas
-RUN python3 -m pip install jupyter
-RUN python3 -m pip install ipywidgets
-RUN python3 -m pip install matplotlib
-RUN python3 -m pip install transformers==4.18.0
-RUN python3 -m pip install tokenizers==0.12.1
-RUN python3 -m pip install evaluate
-RUN python3 -m pip install accelerate
-RUN python3 -m pip install deepspeed
-RUN python3 -m pip install datasets==2.4.0
-RUN python3 -m pip install wandb
-RUN python3 -m pip install sklearn
-RUN python3 -m pip install lingpy --user
 
 # Install additional dependencies
 RUN python3 -m pip install autopep8
@@ -53,6 +38,9 @@ ENV USER_GROUP="users"
 RUN mkdir /home/$USER_NAME 
 RUN useradd -l -d /home/$USER_NAME -u $USER_UID -g $USER_GROUP $USER_NAME
 
+# Add location of binaries to path (for LM & tokenizer train scripts)
+ENV PATH=$PATH:/home/${USER_NAME}/.local/bin
+
 # Setup VSCode stuff (comment when not using vscode)
 RUN mkdir /home/$USER_NAME/.vscode-server 
 RUN mkdir /home/$USER_NAME/.vscode-server-insiders
@@ -68,4 +56,6 @@ RUN chown -R ${USER_UID}:${USER_GID} /opt/conda/bin/
 # Set workdir when starting container
 WORKDIR /languagemodels
 
-CMD ["/bin/bash"]
+# TODO: install the package in development mode when run
+# CMD ["/bin/bash"]
+CMD /bin/bash -C ./docker_setup.sh ; /bin/bash  
