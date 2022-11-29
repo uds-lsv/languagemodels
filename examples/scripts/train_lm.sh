@@ -7,7 +7,7 @@ DATA_DIR="/datasets/wikitext-103-raw"
 CONFIG_PATH="/languagemodels/examples/configs/gru/basic_gru.json"
 OUTPUT_DIR="/logfiles"
 
-python /languagemodels/languagemodels/train_lm.py \
+train_lm \
     --wandb_project_name languagemodels \
     --train_file $DATA_DIR/wiki.valid.txt \
     --validation $DATA_DIR/wiki.valid.txt \
