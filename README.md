@@ -10,35 +10,38 @@ A simple toolkit to train and evaluate language models.
 
 ```
 docker build \
-     -f ./docker/Dockerfile \
+     -f ./Dockerfile \
      --build-arg USER_UID=$UID \
      --build-arg USER_NAME=$(id -un) \
      -t languagemodels:latest .
 ```
 
 - Run the container from the project folder. You still need to change the paths to the actual paths on your machine.
+
 ```
-docker run -it --rm --runtime=nvidia --pid=host --ipc=host --user mmosbach \
-    --name languagemodels-dev \
-    -v /nethome/$UID/projects/languagemodels:/languagemodels \
-    -v /data/users/$UID/pre-trained-transformers:/pre-trained-transformers \
-    -v /data/users/$UID/datasets:/datasets \
-    -v /data/users/$UID/logs/languagemodels/logfiles:/logfiles \
+USER_NAME=$(id -un)
+docker run -it --rm --gpus=all --pid=host --ipc=host --user $USER_NAME \
+    -v /nethome/$USER_NAME/projects/languagemodels:/languagemodels \
+    -v /data/users/$USER_NAME/pre-trained-transformers:/pre-trained-transformers \
+    -v /data/users/$USER_NAME/datasets:/datasets \
+    -v /data/users/$USER_NAME/logs/languagemodels/logfiles:/logfiles \
     languagemodels:latest
 ```
 
 - Running the container in this way will install the `languagemodels` package in development mode. This enables changing the code of the package on-the-fly without rebuilding the container.
+- You can leave a running container via: `CTRL + p + q`
+- You can re-attach to a container by running: `docker attach <container-name>`
 
 ### Python venv
 
 - Create a new virtual environment: `python3 -m venv ./languagemodels-venv`
-- Activate the virtual environemtt: `source languagemodels-venv/bin/activate`
+- Activate the virtual environment: `source languagemodels-venv/bin/activate`
 - Install package & requirements: `pip install -e .`
 
 ### Python miniconda
 
 - Create a new virtual environment: `conda create --name languagemodels python=3.7`
-- Activate the virtual environemtt: `conda activate languagemodels`
+- Activate the virtual environment: `conda activate languagemodels`
 
 - Upgrade pip: `pip install --upgrade pip`
 - Install package & requirements: `pip install -e .`
