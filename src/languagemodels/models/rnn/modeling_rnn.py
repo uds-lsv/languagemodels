@@ -6,10 +6,9 @@ from torch import nn
 from torch.nn import functional as F
 from torch.nn import CrossEntropyLoss
 
-from languagemodels.modeling_utils import LanguageModel
+from transformers.modeling_utils import PreTrainedModel
 
-
-class RnnLM(LanguageModel):
+class RnnLM(PreTrainedModel):
     def __init__(self, config=None):
         super().__init__(config)
         self.vocab_size = config.vocab_size
@@ -89,26 +88,30 @@ class RnnLM(LanguageModel):
         else:
             return self.initial_hidden_state.expand((-1, batch_size, -1)).contiguous()
 
+    # @classmethod
+    # def load_model(cls, config, pre_trained=False, model_name_or_path=None):
+    #     # TODO(mm): move this functionality to the parent class
+
+    #     if pre_trained:
+    #         # TODO(mm): load a pre-trained model from disc
+    #         # TODO(mm): if config is None, search for a config in model_name_or_path
+    #         model = cls(config)  # create a model based on the config
+    #         model.state_dict(
+    #             torch.load(model_name_or_path)
+    #         )  # overwrite the state_dict
+    #     else:
+    #         model = cls(config)
+    #     return model
+
+    # def save_model(self, path):
+    #     state_dict = self.state_dict()
+    #     path_name = os.path.join(path, f"{self.cell_type}-lm")
+    #     print("Saving model to:", path_name)
+    #     torch.save(state_dict, path_name)
+
     @classmethod
-    def load_model(cls, config, pre_trained=False, model_name_or_path=None):
-        # TODO(mm): move this functionality to the parent class
-
-        if pre_trained:
-            # TODO(mm): load a pre-trained model from disc
-            # TODO(mm): if config is None, search for a config in model_name_or_path
-            model = cls(config)  # create a model based on the config
-            model.state_dict(
-                torch.load(model_name_or_path)
-            )  # overwrite the state_dict
-        else:
-            model = cls(config)
-        return model
-
-    def save_model(self, path):
-        state_dict = self.state_dict()
-        path_name = os.path.join(path, f"{self.cell_type}-lm")
-        print("Saving model to:", path_name)
-        torch.save(state_dict, path_name)
+    def from_config(cls, config, **kwargs):
+        return cls._from_config(config, **kwargs)
 
     def forward(self, input_ids, labels=None, hidden_state=None, **kwargs):
         # get the input embeddings

@@ -12,7 +12,7 @@ train_lm \
     --train_file $DATA_DIR/wiki.valid.txt \
     --validation $DATA_DIR/wiki.valid.txt \
     --model_type rnn-lm \
-    --tokenizer_path $DATA_DIR/tokenizer-wiki.json \
+    --tokenizer_name_or_path $DATA_DIR/tokenizer-wiki.json \
     --config_name_or_path $CONFIG_PATH \
     --learning_rate 1e-3 \
     --batch_size 16 \

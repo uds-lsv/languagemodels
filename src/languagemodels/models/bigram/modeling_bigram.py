@@ -4,10 +4,9 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 
-from languagemodels.modeling_utils import LanguageModel
+from transformers.modeling_utils import PreTrainedModel
 
-
-class BigramLM(LanguageModel):
+class BigramLM(PreTrainedModel):
     def __init__(self, config=None):
         super().__init__(config)
         self.vocab_size = config.vocab_size
@@ -17,24 +16,24 @@ class BigramLM(LanguageModel):
             torch.zeros((self.vocab_size, self.vocab_size))
         )
 
-    @classmethod
-    def load_model(cls, config, pre_trained=False, model_name_or_path=None):
-        if pre_trained:
-            # TODO(mm): load a pre-trained model from disc
-            # TODO(mm): if config is None, search for a config in model_name_or_path
-            model = cls(config)  # create a model based on the config
-            model.state_dict(
-                torch.load(model_name_or_path)
-            )  # overwrite the state_dict
-        else:
-            model = cls(config)
-        return model
+    # @classmethod
+    # def load_model(cls, config, pre_trained=False, model_name_or_path=None):
+    #     if pre_trained:
+    #         # TODO(mm): load a pre-trained model from disc
+    #         # TODO(mm): if config is None, search for a config in model_name_or_path
+    #         model = cls(config)  # create a model based on the config
+    #         model.state_dict(
+    #             torch.load(model_name_or_path)
+    #         )  # overwrite the state_dict
+    #     else:
+    #         model = cls(config)
+    #     return model
 
-    def save_model(self, path):
-        state_dict = self.state_dict()
-        path_name = os.path.join(path, "bigram-lm")
-        print("Saving model to:", path_name)
-        torch.save(state_dict, path_name)
+    # def save_model(self, path):
+        # state_dict = self.state_dict()
+        # path_name = os.path.join(path, "bigram-lm")
+        # print("Saving model to:", path_name)
+        # torch.save(state_dict, path_name)
 
     def forward(self, input_ids, labels=None, **kwargs):
         # input_ids is a batch of bigrams, hence input_ids.shape == (batch_size, 2)

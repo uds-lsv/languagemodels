@@ -24,7 +24,7 @@ SUPPORTED_TOKKENIZERS = [
 ]
 
 
-def _train_character_level_tokenizer(files, tokenization_function):
+def _train_character_level_tokenizer(files):
     """Train a word-level tokenizer on a list of files
 
     Args:
@@ -34,8 +34,8 @@ def _train_character_level_tokenizer(files, tokenization_function):
     """
     assert args.tokenization_function in available_tokenization_functions()
     
-    tok_function = get_tokenization_function(args.tokenization_function)
-    tokenizer = CharLevelTokenizer(tokenization_function=tok_function, model_max_length=25)
+    tokenizer = CharLevelTokenizer(model_max_length=25)
+    tokenizer.tokenization_function = get_tokenization_function(args.tokenization_function)
     tokenizer.train(files)
 
     return tokenizer
@@ -71,21 +71,19 @@ def _train_word_level_tokenizer(vocab_size, files):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="languagemodels")
-    parser.add_argument('--tokenizer-type', type=str, default="word-level",
+    parser.add_argument('--tokenizer_type', type=str, default="word-level",
                         choices=SUPPORTED_TOKKENIZERS,
                         help="directory which contains the input files")
-    parser.add_argument('--input-files-dir', type=str,
+    parser.add_argument('--input_files_dir', type=str,
                         help="directory which contains the input files")
-    parser.add_argument('--input-files-type', type=str,
+    parser.add_argument('--input_files_type', type=str,
                         help="file type of input files, e.g. .raw")
-    parser.add_argument('--vocab-size', type=int, default=10000,
+    parser.add_argument('--vocab_size', type=int, default=10000,
                         help="the tokenizer's vocabulary size")
-    parser.add_argument('--tokenization-function', type=str, default="ged",
+    parser.add_argument('--tokenization_function', type=str, default="ged",
                         help="a function to split")
-    parser.add_argument('--output-dir', type=str,
+    parser.add_argument('--output_dir', type=str,
                         help="where to save the tokenizer")
-    parser.add_argument('--tokenizer-name', type=str,
-                        help="name of the tokenizer")
 
     args = parser.parse_args()
 
@@ -111,7 +109,7 @@ if __name__ == '__main__':
         tokenizer = _train_word_level_tokenizer(args.vocab_size, files)
     elif args.tokenizer_type == "character-level":
         print("Training character-level tokenizer ...")
-        tokenizer = _train_character_level_tokenizer(args.input_files_dir, args.tokenization_function)
+        tokenizer = _train_character_level_tokenizer(files)
 
     # print some tokenized and encoded data
     encoded_data = tokenizer.encode_batch(data[:5])
@@ -127,8 +125,11 @@ if __name__ == '__main__':
             print(encoded_line.offsets)
 
     # save tokenizer
-    tokenizer_name = f"tokenizer-{args.tokenizer_name}.json"
-    os.makedirs(args.output_dir, exist_ok=True)  # make sure output dir exists
+    # os.makedirs(args.output_dir, exist_ok=True)  # make sure output dir exists
     print("Done. Saving tokenizer to:", os.path.join(
-        args.output_dir, tokenizer_name))
-    tokenizer.save(os.path.join(args.output_dir, tokenizer_name))
+        args.output_dir, "tokenizer.json"))
+    if isinstance(tokenizer, CharLevelTokenizer):
+        tokenizer.save_pretrained(args.output_dir)
+    else:
+        tokenizer.save(os.path.join(args.output_dir, "tokenizer.json"))
+
