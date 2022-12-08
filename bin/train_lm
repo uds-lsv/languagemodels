@@ -16,11 +16,11 @@ from transformers.tokenization_utils_base import BatchEncoding
 from languagemodels import LMFactory, TokenizerFactory
 from languagemodels.logging_utils import WandbLogger
 
-from languagemodels.utils import set_seed, get_timestamp, create_dir
+from languagemodels.utils import set_seed, get_timestamp, create_dir, save_args
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="languagemodels")
+    parser = argparse.ArgumentParser(description="languagemodels-train")
 
     # data args
     parser.add_argument('--train_file', type=str, help="path to training data")
@@ -344,7 +344,8 @@ def main():
         # make sure output dir exists
         os.makedirs(args.output_dir, exist_ok=True)
         model.save_pretrained(args.output_dir)
-
+        args.model_name_or_path = os.path.join(args.output_dir, "pytorch_model.bin")
+        save_args(args, args.output_dir)
     # -------------------- end saving and clean-up --------------------
 
 
