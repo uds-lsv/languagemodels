@@ -1,0 +1,31 @@
+#!/usr/bin/env python
+
+import argparse
+
+from languagemodels.utils import load_args
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="languagemodels-eval")
+
+    # data args
+    parser.add_argument('--test_file', type=str, 
+                        help="path to test data")
+
+    # model weights, model config, command line args
+    parser.add_argument('--output_dir', type=str, 
+                        help="path to model weights, config and trainig command line args")
+    parser.add_argument('--device', type=str, default='cpu',
+                        help="device to use for compute, examples: cpu|cuda|cuda:0")
+    args = parser.parse_args()
+    return args
+
+
+def main():
+    args = parse_args()
+
+    train_args = load_args(args.output_dir)
+    print(train_args.__dict__)
+
+if __name__ == "__main__":
+    main()
