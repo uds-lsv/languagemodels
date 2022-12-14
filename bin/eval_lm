@@ -33,6 +33,10 @@ def parse_args():
     
     # Flags for saving different parts of the output (surprisal & tokens always saved)
     parser.add_argument("--save_word_ids", action='store_true')
+
+    # testing args
+    parser.add_argument('--batch_size', type=int, default=100,
+                        help="batch size")
     
     args = parser.parse_args()
     return args
@@ -47,6 +51,10 @@ def main():
     data_files = {
         "test": args.test_file
     }
+
+    save_dir = os.path.join(args.output_dir, "eval_results")
+    if not os.path.exists(save_dir):
+        os.mkdir(save_dir)
 
     dataset_args = {}
     extension = args.test_file.split(".")[-1]
@@ -124,12 +132,12 @@ def main():
         }
         # all models will shift the labels, so here it's fine to simply copy the inputs
         # for the bigram LM this is a bit of a waste of memory but we ignore this for now
-        # result["labels"] = result["input_ids"].copy()
-        # 
-        # return result
+        result["labels"] = result["input_ids"].copy()
+        
+        return result
 
-        sequences["labels"] = sequences["input_ids"].copy()
-        return sequences
+        # sequences["labels"] = sequences["input_ids"].copy()
+        # return sequences
 
     tokenized_datasets = raw_dataset.map(
         tokenize_function,
@@ -163,15 +171,19 @@ def main():
         # word_offsets=[]
     # )
 
-    out_dict = defaultdict(list)
+    
 
     for i in range(10):
         print(test_dataset[i])
 
     test_dataloader = DataLoader(
-            test_dataset, shuffle=True, collate_fn=default_data_collator, batch_size=train_args.batch_size, drop_last=True)
+            test_dataset, shuffle=True, collate_fn=default_data_collator, batch_size=args.batch_size, drop_last=True)
     
-    for batch in test_dataloader:
+    for batch_id, batch in enumerate(test_dataloader):
+
+        # init output dict
+        out_dict = defaultdict(list)
+
         # put data on device
         batch = {k: v.to(args.device) for k, v in batch.items()}
 
@@ -188,14 +200,18 @@ def main():
             # detach the hidden state to avoid backpropagating through all batches
             hidden_state = repackage_hidden(final_hidden_state)
 
-        predicted_tokens += train_args.batch_size * (block_size - 1)
+        predicted_tokens += args.batch_size * (block_size - 1)
 
         probs = F.softmax(logits)
         surprisal = torch.log2(probs)
 
+        def ids_to_tokens(ids):
+            return [tokenizer.id_to_token(id) for id in ids]
+
         surprisal = surprisal.detach().cpu().numpy()
         word_ids = [list(ids) for ids in batch["input_ids"].cpu().numpy()]
-        tokens = [tokenizer.convert_ids_to_tokens(ids) for ids in word_ids]
+        # tokens = [tokenizer.convert_ids_to_tokens(ids) for ids in word_ids]
+        tokens = [ids_to_tokens(ids) for ids in word_ids]
         special_tokens_mask = batch["special_tokens_mask"].cpu().numpy()
         
         out_dict["surprisal"].extend(surprisal)
@@ -205,12 +221,13 @@ def main():
         if args.save_word_ids:
             out_dict["word_ids"].extend(word_ids)
 
-    # Save output dict as json
-    out_path = os.path.join(args.output_dir, "eval_result.json")
-    print(f"Saving evaluation results to {out_path}")
-    with open(out_path, 'w') as f:
-        out_str = json.dumps(out_dict.__str__(), ensure_ascii=False)
-        json.dump(out_str, f)
+        # Save output dict as json
+        out_path = os.path.join(save_dir, f"eval_result_batch_{batch_id}.json")
+        print(f"Saving evaluation results to {out_path}")
+        with open(out_path, 'w') as f:
+            out_str = json.dumps(out_dict.__str__(), ensure_ascii=False)
+            json.dump(out_str, f)
+
 
 if __name__ == "__main__":
     main()

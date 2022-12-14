@@ -225,8 +225,11 @@ def main():
         # all models will shift the labels, so here it's fine to simply copy the inputs
         # for the bigram LM this is a bit of a waste of memory but we ignore this for now
         result["labels"] = result["input_ids"].copy()
-
+        
         return result
+
+        # sequences["labels"] = sequences["input_ids"].copy()
+        # return sequences
 
     lm_datasets = tokenized_datasets.map(
         group_sequences,
@@ -344,6 +347,7 @@ def main():
         # make sure output dir exists
         os.makedirs(args.output_dir, exist_ok=True)
         model.save_pretrained(args.output_dir)
+        model_config.save_pretrained(args.output_dir)
         args.model_name_or_path = os.path.join(args.output_dir, "pytorch_model.bin")
         save_args(args, args.output_dir)
     # -------------------- end saving and clean-up --------------------
