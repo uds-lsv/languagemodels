@@ -4,16 +4,16 @@ source /languagemodels/examples/scripts/setup.sh
 
 
 DATA_DIR="/datasets/wikitext-103-raw"
-CONFIG_PATH="/languagemodels/examples/configs/lstm/basic_lstm.json"
-OUTPUT_DIR="/languagemodels/logfiles"
+CONFIG_PATH="/languagemodels/examples/configs/gru/basic_gru.json"
+OUTPUT_DIR="/logfiles"
 
 train_lm \
     --wandb_project_name languagemodels \
     --train_file $DATA_DIR/wiki.valid.txt \
     --validation $DATA_DIR/wiki.valid.txt \
-    --model_type rnn-lm \
-    --tokenizer_name_or_path $DATA_DIR/tokenizer-wiki.json \
-    --config_name_or_path $CONFIG_PATH \
+    --model_type bert \
+    --model_name_or_path bert-base-uncased \
+    --tokenizer_name bert-base-uncased \
     --learning_rate 1e-3 \
     --batch_size 16 \
     --max_steps 10000 \

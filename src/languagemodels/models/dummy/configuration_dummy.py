@@ -1,8 +1,7 @@
 from dataclasses import dataclass
 
-from languagemodels.configuration_utils import LanguageModelConfig
-
+from transformers.configuration_utils import PretrainedConfig
 
 @dataclass
-class DummyLMConfig(LanguageModelConfig):
+class DummyLMConfig(PretrainedConfig):
     pass

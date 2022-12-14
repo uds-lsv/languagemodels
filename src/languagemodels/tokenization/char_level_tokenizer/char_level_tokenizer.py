@@ -4,9 +4,11 @@ import itertools
 import json
 import os
 from pathlib import Path
+import collections
 
+# from transformers.tokenization_utils_base import AddedToken, PreTrainedTokenizerBase
 from transformers.tokenization_utils import AddedToken, PreTrainedTokenizer
-from typing import Dict, List, Union, Optional
+from typing import Dict, List, Union, Optional, Tuple
 
 from languagemodels.tokenization.char_level_tokenizer.char_level_tokenization_functions import (
     CharTokenizationFunction,
@@ -19,29 +21,32 @@ TOKENIZATION_FUNCTIONS = {
     "regex": RegexTokenizationFunction
 }
 
-class CharLevelTokenizer(PreTrainedTokenizer):
-    def __init__(self, model_max_length: int, tokenization_function: CharTokenizationFunction, \
-         characters=None, **kwargs):
-        """Simple character tokenizer.
-        Args:
-            characters (Sequence[str]): List of desired characters. Any character which
-                is not included in this list will be replaced by a special token called
-                <unk> with id=6.
-                an id (starting at 7) will be assigned to each character.
-            model_max_length (int): Model maximum sequence length.
-            tokenization_function: Tokenization function called in the 
-                CharLevelTokenizer.tokenize() method
-        """
-        self.model_max_length = model_max_length
-        self.tokenization_function = tokenization_function
-        bos_token = AddedToken("<s>", lstrip=False, rstrip=False)
-        eos_token = AddedToken("</s>", lstrip=False, rstrip=False)
-        sep_token = AddedToken("<sep>", lstrip=False, rstrip=False)
-        cls_token = AddedToken("<cls>", lstrip=False, rstrip=False)
-        pad_token = AddedToken("<pad>", lstrip=False, rstrip=False)
-        unk_token = AddedToken("<unk>", lstrip=False, rstrip=False)
+VOCAB_FILES_NAMES = {"vocab_file": "vocab.json"}
 
-        mask_token = AddedToken("<mask>", lstrip=True, rstrip=False)      
+
+class CharLevelTokenizer(PreTrainedTokenizer):
+    """Simple character tokenizer.
+        Args:
+            model_max_length (int): Model maximum sequence length.
+            vocab_file (Union[str, os.PathLike]): Path to the vocabulary file. 
+                If present the characters in this file will be form the vocabulary.
+    """
+    vocab_files_names = VOCAB_FILES_NAMES
+
+    def __init__(self, 
+        model_max_length: int,
+        vocab_file: Union[str, os.PathLike]=None,
+        bos_token="<s>",
+        eos_token="</s>",
+        sep_token="<sep",
+        cls_token="<cls>",
+        pad_token="<pad>",
+        mask_token="<mask>",
+        unk_token="<unk>",
+        **kwargs
+    ):
+        self.model_max_length = model_max_length
+        self.tokenization_function = None
 
         super().__init__(
             bos_token=bos_token,
@@ -51,34 +56,33 @@ class CharLevelTokenizer(PreTrainedTokenizer):
             pad_token=pad_token,
             mask_token=mask_token,
             unk_token=unk_token,
-            add_prefix_space=False,
+            # add_prefix_space=False,
             model_max_length=model_max_length,
             **kwargs,
         )
 
-        if characters:
-            self._vocab_str_to_int = {
-                "<cls>": 0,
-                "<sep>": 1,
-                "<s>": 2,
-                "</s>": 3,
-                "<pad>": 4,
-                "<unk>": 5,
-                "<mask>": 6,
-                **{ch: i + 7 for i, ch in enumerate(characters)},
-            }
+        # TODO (js): This is quite different from e. g. the implementation of the BERT 
+        # tokenizer (https://github.com/huggingface/transformers/blob/main/src/transformers/models/bert/tokenization_bert.py)
+        # This class SHOULD behave exactly like the BERT tokenizer.
+        if vocab_file is not None:
+            assert ".json" in vocab_file
+            with open(vocab_file, 'r') as f:
+                vocab = json.load(f)
+            self._vocab_int_to_str = collections.OrderedDict(
+                [(ids, token) for token, ids in vocab.items()])
+       
         else:
-            self._vocab_str_to_int = {
-                "<cls>": 0,
-                "<sep>": 1,
-                "<s>": 2,
-                "</s>": 3,
-                "<pad>": 4,
-                "<unk>": 5,
-                "<mask>": 6
-            }
+            self._vocab_int_to_str = collections.OrderedDict([
+                (0, "<cls>"),
+                (1, "<sep>"),
+                (2, "<s>"),
+                (3, "</s>"),
+                (4, "<pad>"),
+                (5, "<unk>"),
+                (6, "<mask>")
+            ])
 
-        self._vocab_int_to_str = {v: k for k, v in self._vocab_str_to_int.items()}
+        self._vocab_str_to_int = {v: k for k, v in self._vocab_int_to_str.items()}
 
     @property
     def vocab_size(self) -> int:
@@ -89,11 +93,19 @@ class CharLevelTokenizer(PreTrainedTokenizer):
         tokenized = [self.bos_token] + tokenized + [self.eos_token]
         return tokenized
 
-    def _convert_token_to_id(self, token: str) -> int:
-        return self._vocab_str_to_int.get(token, self._vocab_str_to_int["<unk>"])
+    def convert_tokens_to_ids(self, tokens: Union[str, List[str]]) -> int:
+        if isinstance(tokens, list):
+            return [self._vocab_str_to_int.get(token, self._vocab_str_to_int["<unk>"]) \
+                for token in tokens]
+        else:
+            return self._vocab_str_to_int.get(tokens, self._vocab_str_to_int["<unk>"])
 
-    def _convert_id_to_token(self, index: int) -> str:
-        return self._vocab_int_to_str[index]
+    def convert_ids_to_tokens(self, indices: Union[int, List[int]]) -> str:
+        if isinstance(indices, list):
+            return [self._vocab_int_to_str.get(index, self.unk_token) \
+                for index in indices]
+        else:
+            return self._vocab_int_to_str.get(indices, self.unk_token)
 
     def tokens_to_string(self, tokens):
         return "".join(tokens)
@@ -109,8 +121,9 @@ class CharLevelTokenizer(PreTrainedTokenizer):
         return result
 
     def train(self, files):
+        assert self.tokenization_function
         chars = set()
-        for file in Path(files).iterdir():
+        for file in files:
             with open(file, 'r') as in_file:
                 sentences = in_file.read().split('\n')
                 sentences = [sent.split() for sent in sentences]
@@ -140,7 +153,7 @@ class CharLevelTokenizer(PreTrainedTokenizer):
         encodings_word_offsets = []
         encodings_special_tokens_masks = []
         for ids in encodings["input_ids"]:
-            tokens = [self._convert_id_to_token(i) for i in ids]
+            tokens = [self.convert_ids_to_tokens(i) for i in ids]
             word_ids = [i if id != self.pad_token_id else 0 for i, id in enumerate(ids)]
             word_offsets = [(idx, idx) if i != self.pad_token_id else (0, 0) \
                 for idx, i in enumerate(ids)]
@@ -185,38 +198,17 @@ class CharLevelTokenizer(PreTrainedTokenizer):
             result += len(token_ids_1 + sep) * [1]
         return result
 
-    def get_config(self) -> Dict:
-        return {
-            "characters": self.characters,
-            "tok_function_name": self.tokenization_function.name,
-            "tok_function_config": self.tokenization_function.get_config(),
-            "model_max_length": self.model_max_length,
-        }
+    def save_vocabulary(self, save_directory: str, filename_prefix: Optional[str] = None) -> Tuple[str]:
+        
+        vocab_file = os.path.join(save_directory, VOCAB_FILES_NAMES["vocab_file"])
+        
+        with open(vocab_file, 'w') as f:
+            out_str = json.dumps(self._vocab_str_to_int, ensure_ascii=False)
+            f.write(out_str)
+        return (vocab_file, )
 
-    @classmethod
-    def from_config(cls, config: Dict):
-        cfg = {}
-        cfg["characters"] = config["characters"]
-        # load tokenization function
-        tok_function_name = config["tok_function_name"]
-        tok_function_cfg = config["tok_function_config"]
-        tok_function = TOKENIZATION_FUNCTIONS[tok_function_name](**tok_function_cfg)
-        cfg["tokenization_function"] = tok_function
-        cfg["model_max_length"] = config["model_max_length"]
-        return cls(**cfg)
-
-    def save(self, save_file: Union[str, os.PathLike], **kwargs):
-        cfg_file = Path(save_file)
-        cfg = self.get_config()
-        with open(cfg_file, "w") as f:
-            json.dump(cfg, f, indent=4)
-
-    @classmethod
-    def from_file(cls, path, **kwargs) -> "CharLevelTokenizer":
-        cfg_file = Path(path)
-        with open(cfg_file) as f:
-            cfg = json.load(f)
-        return cls.from_config(cfg)
+    def set_tokenization_function(self, tokenization_function: CharTokenizationFunction):
+        self.tokenization_function  = tokenization_function
 
     @property
     def special_tokens(self) -> List[str]:

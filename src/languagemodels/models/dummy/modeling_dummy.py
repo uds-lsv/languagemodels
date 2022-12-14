@@ -1,10 +1,10 @@
 import torch
 from torch import nn
 
-from languagemodels.modeling_utils import LanguageModel
+from transformers.modeling_utils import PreTrainedModel
 
 
-class DummyLM(LanguageModel):
+class DummyLM(PreTrainedModel):
     def __init__(self, config=None):
         super().__init__(config)
 

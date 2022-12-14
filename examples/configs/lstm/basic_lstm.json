@@ -1,0 +1,11 @@
+{
+    "vocab_size": 30000,
+    "block_size": 64,
+    "cell_type": "lstm",
+    "embedding_dim": 128,
+    "hidden_dim": 256,
+    "num_layers": 4,
+    "add_bias": true,
+    "dropout": 0.1,
+    "embedding_dropout": 0.1
+}
