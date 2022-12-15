@@ -9,7 +9,7 @@ from tokenizers.models import WordLevel
 from tokenizers.trainers import WordLevelTrainer
 from tokenizers.pre_tokenizers import Whitespace
 from tokenizers.processors import TemplateProcessing
-from transformers.tokenization_utils_base import BatchEncoding
+from transformers.tokenization_utils import BatchEncoding, PreTrainedTokenizer
 
 
 from languagemodels.tokenization import (
@@ -34,13 +34,13 @@ def _train_character_level_tokenizer(files):
     """
     assert args.tokenization_function in available_tokenization_functions()
     
-    tokenizer = CharLevelTokenizer(model_max_length=25)
+    tokenizer = CharLevelTokenizer(model_max_length=args.block_size)
     tokenizer.tokenization_function = get_tokenization_function(args.tokenization_function)
     tokenizer.train(files)
 
     return tokenizer
 
-def _train_word_level_tokenizer(vocab_size, files):
+def _train_word_level_tokenizer(files):
     """Train a word-level tokenizer on a list of files
 
     Args:
@@ -54,8 +54,8 @@ def _train_word_level_tokenizer(vocab_size, files):
 
     # these are default and can be overwritten
     trainer = WordLevelTrainer(
-        vocab_size=vocab_size,
-        special_tokens=["<unk>", "<s>", "</s>"]
+        vocab_size=args.vocab_size,
+        special_tokens=["<unk>", "<s>", "</s>", "<pad>"]
     )
 
     # TODO(mm): look into Normalizers and additional Pre-tokenizers and provide good defaults
@@ -65,6 +65,17 @@ def _train_word_level_tokenizer(vocab_size, files):
     tokenizer.post_processor = TemplateProcessing(
         single="<s> $A </s>",
         special_tokens=[(t, tokenizer.token_to_id(t)) for t in ["<s>", "</s>"]]
+    )
+
+    # ensure that the tokenizer produces only sequences fitting the block size of the model
+    tokenizer.enable_truncation(
+            max_length=args.block_size
+        )
+    # enable padding
+    tokenizer.enable_padding(
+        pad_id=tokenizer.token_to_id("<pad>"),
+        pad_token="<pad>",
+        length=args.block_size
     )
     return tokenizer
 
@@ -80,6 +91,8 @@ if __name__ == '__main__':
                         help="file type of input files, e.g. .raw")
     parser.add_argument('--vocab_size', type=int, default=10000,
                         help="the tokenizer's vocabulary size")
+    parser.add_argument('--block_size', type=int, default=128,
+                        help="the maximal length of a sequence")
     parser.add_argument('--tokenization_function', type=str, default="ged",
                         help="a function to split")
     parser.add_argument('--output_dir', type=str,
@@ -106,7 +119,7 @@ if __name__ == '__main__':
 
     if args.tokenizer_type == "word-level":
         print("Training word-level tokenizer ...")
-        tokenizer = _train_word_level_tokenizer(args.vocab_size, files)
+        tokenizer = _train_word_level_tokenizer(files)
     elif args.tokenizer_type == "character-level":
         print("Training character-level tokenizer ...")
         tokenizer = _train_character_level_tokenizer(files)
@@ -125,10 +138,10 @@ if __name__ == '__main__':
             print(encoded_line.offsets)
 
     # save tokenizer
-    # os.makedirs(args.output_dir, exist_ok=True)  # make sure output dir exists
+    os.makedirs(args.output_dir, exist_ok=True)  # make sure output dir exists
     print("Done. Saving tokenizer to:", os.path.join(
         args.output_dir, "tokenizer.json"))
-    if isinstance(tokenizer, CharLevelTokenizer):
+    if issubclass(tokenizer.__class__, PreTrainedTokenizer):
         tokenizer.save_pretrained(args.output_dir)
     else:
         tokenizer.save(os.path.join(args.output_dir, "tokenizer.json"))

@@ -7,6 +7,8 @@ import json
 import os
 
 from datasets import load_dataset
+import numpy as np
+from tokenizers import Tokenizer
 import torch
 from torch.utils.data.dataloader import DataLoader
 from torch.nn import functional as F
@@ -26,16 +28,20 @@ def parse_args():
                         help="path to test data")
 
     # model weights, model config, command line args
-    parser.add_argument('--output_dir', type=str, 
+    parser.add_argument('--model_dir', type=str, 
                         help="path to model weights, config and trainig command line args")
     parser.add_argument('--device', type=str, default='cpu',
                         help="device to use for compute, examples: cpu|cuda|cuda:0")
-    
+
+    # output dir
+    parser.add_argument('--output_dir', type=str, 
+                        help="path to the saved evaluation results")
     # Flags for saving different parts of the output (surprisal & tokens always saved)
     parser.add_argument("--save_word_ids", action='store_true')
+    parser.add_argument("--save_word_offsets", action='store_true')
 
     # testing args
-    parser.add_argument('--batch_size', type=int, default=100,
+    parser.add_argument('--batch_size', type=int, default=10,
                         help="batch size")
     
     args = parser.parse_args()
@@ -45,35 +51,44 @@ def parse_args():
 def main():
     args = parse_args()
 
-    train_args = load_args(args.output_dir)
-    print(train_args.__dict__)
+    train_args = load_args(args.model_dir)
+
+    assert os.path.exists(args.model_dir)
 
     data_files = {
         "test": args.test_file
     }
 
-    save_dir = os.path.join(args.output_dir, "eval_results")
-    if not os.path.exists(save_dir):
-        os.mkdir(save_dir)
+    if not os.path.exists(args.output_dir):
+        os.makedirs(args.output_dir)
 
     dataset_args = {}
     extension = args.test_file.split(".")[-1]
     if extension == "txt":
         extension = "text"
 
-    config_path = os.path.join(args.output_dir, "config.json")
-    model_path = os.path.join(args.output_dir, "pytorch_model.bin")
+    config_path = os.path.join(args.model_dir, "config.json")
+    model_path = os.path.join(args.model_dir, "pytorch_model.bin")
+    tokenizer_path = os.path.join(args.model_dir, "tokenizer.json")
     
     raw_dataset = load_dataset(extension, data_files=data_files, **dataset_args)
 
-    tokenizer = TokenizerFactory.get_tokenizer(tokenizer_type=train_args.tokenizer_type, \
-        tokenizer_name=train_args.tokenizer_name, tokenizer_name_or_path=train_args.tokenizer_name_or_path)
+    tokenizer = TokenizerFactory.get_tokenizer(tokenizer_type="pretrained-tokenizer", \
+        tokenizer_name=train_args.tokenizer_name, tokenizer_name_or_path=tokenizer_path)
+
+    # This is important because padded positions will be removed from the output dict
+    pad_id = tokenizer.token_to_id("<pad>") if isinstance(tokenizer, Tokenizer) else tokenizer.pad_token_id
 
     # load model
     model, model_config = LMFactory.get_lm(model_type=train_args.model_type, config_name_or_path=config_path,
                                            pre_trained=True, model_name_or_path=model_path)
     model.eval()
     model.to(args.device)
+
+    # group data into chunks of length block_size (block_size will be model specific, e.g. BigramLM)
+    block_size = 512 if train_args.model_type == "bert" else model.block_size
+    # the stride is an important assumption we make on the format of our input data
+    stride = 1 if train_args.model_type == "bigram-lm" else block_size
 
     # tokenize and encode data
     def tokenize_function(sequences):
@@ -99,10 +114,6 @@ def main():
 
         return output_dict
 
-    # group data into chunks of length block_size (block_size will be model specific, e.g. BigramLM)
-    block_size = 512 if train_args.model_type == "bert" else model.block_size
-    # the stride is an important assumption we make on the format of our input data
-    stride = 1 if train_args.model_type == "bigram-lm" else block_size
 
     def group_sequences(sequences):
         # concatenate all sequences into a single sequence
@@ -132,17 +143,18 @@ def main():
         }
         # all models will shift the labels, so here it's fine to simply copy the inputs
         # for the bigram LM this is a bit of a waste of memory but we ignore this for now
-        result["labels"] = result["input_ids"].copy()
+        # result["labels"] = result["input_ids"].copy()
         
-        return result
+        # return result
 
-        # sequences["labels"] = sequences["input_ids"].copy()
-        # return sequences
+        sequences["labels"] = sequences["input_ids"].copy()
+        return sequences
+
 
     tokenized_datasets = raw_dataset.map(
         tokenize_function,
         batched=True,
-        batch_size=100,
+        batch_size=args.batch_size,
         num_proc=1,  # no parallel processing for now
         desc="Running tokenizer on datasets"
     )
@@ -162,16 +174,6 @@ def main():
 
     predicted_tokens = 0
     hidden_state = None
-
-    # out_dict = dict(
-        # surprisal=[],
-        # tokens=[],
-        # word_ids=[],
-        # special_tokens_mask=[],
-        # word_offsets=[]
-    # )
-
-    
 
     for i in range(10):
         print(test_dataset[i])
@@ -200,33 +202,51 @@ def main():
             # detach the hidden state to avoid backpropagating through all batches
             hidden_state = repackage_hidden(final_hidden_state)
 
-        if args.model_type == "bert":
+        if train_args.model_type == "bert":
                 mask_count = get_num_occurrences_in_tensor(tokenizer.mask_token_id, batch["labels"])
                 predicted_tokens += mask_count
         else:
             predicted_tokens += args.batch_size * (block_size - 1)
 
-        probs = F.softmax(logits)
-        surprisal = torch.log2(probs)
+        probs = F.softmax(logits, dim=-1)
+
+        word_ids = batch["labels"].reshape(args.batch_size, block_size, 1)
+        surprisal = -torch.log2(probs)
+        surprisal = torch.gather(surprisal, -1, word_ids)
+        surprisal = surprisal.squeeze()
 
         def ids_to_tokens(ids):
             return [tokenizer.id_to_token(id) for id in ids]
 
+        # Keep only surprisal values from unpadded positions. This is done by multiplying
+        # the surprisal values by the attention mask, which is 0 at padded positions. 
         surprisal = surprisal.detach().cpu().numpy()
-        word_ids = [list(ids) for ids in batch["input_ids"].cpu().numpy()]
-        # tokens = [tokenizer.convert_ids_to_tokens(ids) for ids in word_ids]
+        mask = batch["attention_mask"].detach().cpu().numpy()
+        surprisal = [(s*mask) for s, mask in zip(surprisal, mask)]
+        surprisal = [s[np.where(s!=0)] for s in surprisal]
+
+        # remove pad ids
+        word_ids = [[id for id in ids if id != pad_id] for ids in word_ids.squeeze().cpu().numpy()]
         tokens = [ids_to_tokens(ids) for ids in word_ids]
-        special_tokens_mask = batch["special_tokens_mask"].cpu().numpy()
+        # special_tokens_mask = batch["special_tokens_mask"].cpu().numpy()
+
+        for ids, toks, surp in zip(word_ids, tokens, surprisal):
+            assert len(ids) == len(toks)
+            assert len(ids) == len(toks)
         
         out_dict["surprisal"].extend(surprisal)
         out_dict["tokens"].extend(tokens)
-        out_dict["special_tokens_mask"].extend(special_tokens_mask)
+        # out_dict["special_tokens_mask"].extend(special_tokens_mask)
 
         if args.save_word_ids:
             out_dict["word_ids"].extend(word_ids)
 
+        if args.save_word_offsets:
+            # TODO (js) gather & save word offsets
+            pass
+
         # Save output dict as json
-        out_path = os.path.join(save_dir, f"eval_result_batch_{batch_id}.json")
+        out_path = os.path.join(args.output_dir, f"eval_batch_{batch_id}.json")
         print(f"Saving evaluation results to {out_path}")
         with open(out_path, 'w') as f:
             out_str = json.dumps(out_dict.__str__(), ensure_ascii=False)
