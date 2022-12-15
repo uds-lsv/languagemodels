@@ -14,7 +14,7 @@ from transformers import default_data_collator
 from transformers.tokenization_utils_base import BatchEncoding
 
 from languagemodels import LMFactory, TokenizerFactory
-from languagemodels.scripting_utils import repackage_hidden
+from languagemodels.scripting_utils import get_num_occurrences_in_tensor,  repackage_hidden
 from languagemodels.utils import load_args
 
 
@@ -192,7 +192,7 @@ def main():
         if train_args.model_type == "bert":
             logits, loss, final_hidden_state = model.forward(
                 input_ids=batch["input_ids"])
-        elif train_args.model_type == "rnn-lm":
+        else:
             logits, loss, final_hidden_state = model.forward(
                     input_ids=batch["input_ids"], labels=batch["labels"], hidden_state=hidden_state)
 
@@ -200,7 +200,11 @@ def main():
             # detach the hidden state to avoid backpropagating through all batches
             hidden_state = repackage_hidden(final_hidden_state)
 
-        predicted_tokens += args.batch_size * (block_size - 1)
+        if args.model_type == "bert":
+                mask_count = get_num_occurrences_in_tensor(tokenizer.mask_token_id, batch["labels"])
+                predicted_tokens += mask_count
+        else:
+            predicted_tokens += args.batch_size * (block_size - 1)
 
         probs = F.softmax(logits)
         surprisal = torch.log2(probs)
