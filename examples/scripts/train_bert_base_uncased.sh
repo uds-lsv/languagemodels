@@ -4,7 +4,6 @@ source /languagemodels/examples/scripts/setup.sh
 
 
 DATA_DIR="/datasets/wikitext-103-raw"
-CONFIG_PATH="/languagemodels/examples/configs/gru/basic_gru.json"
 OUTPUT_DIR="/logfiles"
 
 train_lm \
