@@ -8,7 +8,7 @@ A simple toolkit to train and evaluate language models.
 
 - Build the Docker image. It is build from the official Nvidia PyTorch image (Versio 21.03) and already contains Python 3.8, miniconda and CUDA.
 
-```
+```shell
 docker build \
      -f ./Dockerfile \
      --build-arg USER_UID=$UID \
@@ -18,10 +18,10 @@ docker build \
 
 - Run the container from the project folder. You still need to change the paths to the actual paths on your machine.
 
-```
-USER_NAME=$(id -un)
-docker run -it --rm --gpus=all --pid=host --ipc=host --user $USER_NAME \
-    -v /nethome/$USER_NAME/projects/languagemodels:/languagemodels \
+```shell
+export USER_NAME=$(id -un)
+docker run -it --rm --runtime=nvidia --pid=host --ipc=host --user $USER_NAME \
+    -v /nethome/$USER_NAME/git/lsv/languagemodels:/languagemodels \
     -v /data/users/$USER_NAME/pre-trained-transformers:/pre-trained-transformers \
     -v /data/users/$USER_NAME/datasets:/datasets \
     -v /data/users/$USER_NAME/logs/languagemodels/logfiles:/logfiles \
