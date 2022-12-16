@@ -4,17 +4,20 @@ import argparse
 import time
 from itertools import chain
 import os
-import logging
 
 from datasets import load_dataset
-from tokenizers import Tokenizer
 import torch
 from torch.utils.data.dataloader import DataLoader
 from transformers import default_data_collator
-from transformers.tokenization_utils_base import BatchEncoding
+from transformers.tokenization_utils import BatchEncoding, PreTrainedTokenizer
 
 from languagemodels import LMFactory, TokenizerFactory
 from languagemodels.logging_utils import WandbLogger
+from languagemodels.scripting_utils import (
+    get_num_occurrences_in_tensor, 
+    repackage_hidden,
+    save_tokenizer
+)
 
 from languagemodels.utils import set_seed, get_timestamp, create_dir, save_args
 
@@ -83,15 +86,6 @@ def parse_args():
         assert args.wandb_project_name is not None, "when using wandb, you need to specify a project name"
 
     return args
-
-
-def repackage_hidden(hidden_state):
-    """Wraps hidden states in new Tensors, to detach them from their history."""
-
-    if isinstance(hidden_state, torch.Tensor):
-        return hidden_state.detach()
-    else:
-        return tuple(repackage_hidden(t) for t in hidden_state)
 
 
 def evaluate(model, validation_dataset, args):
@@ -224,12 +218,12 @@ def main():
 
         # all models will shift the labels, so here it's fine to simply copy the inputs
         # for the bigram LM this is a bit of a waste of memory but we ignore this for now
-        result["labels"] = result["input_ids"].copy()
+        # result["labels"] = result["input_ids"].copy()
         
-        return result
+        # return result
 
-        # sequences["labels"] = sequences["input_ids"].copy()
-        # return sequences
+        sequences["labels"] = sequences["input_ids"].copy()
+        return sequences
 
     lm_datasets = tokenized_datasets.map(
         group_sequences,
@@ -246,7 +240,7 @@ def main():
         type="torch", columns=["input_ids", "labels", "attention_mask", ])
 
     # print some examples from the training data
-    for idx in range(1):
+    for idx in range(5):
         print(train_dataset[idx])
 
     # -------------------- end process data --------------------
@@ -294,7 +288,7 @@ def main():
             if args.model_type == "bert":
                 logits, loss, final_hidden_state = model.forward(
                     input_ids=batch["input_ids"])
-            elif args.model_type == "rnn-lm":
+            else:
                 logits, loss, final_hidden_state = model.forward(
                         input_ids=batch["input_ids"], labels=batch["labels"], hidden_state=hidden_state)
 
@@ -302,7 +296,11 @@ def main():
                 # detach the hidden state to avoid backpropagating through all batches
                 hidden_state = repackage_hidden(final_hidden_state)
 
-            predicted_tokens += args.batch_size * (block_size - 1)
+            if args.model_type == "bert":
+                mask_count = get_num_occurrences_in_tensor(tokenizer.mask_token_id, batch["labels"])
+                predicted_tokens += mask_count
+            else:
+                predicted_tokens += args.batch_size * (block_size - 1)
 
             # compute gradients and update weights
             loss.backward()
@@ -316,8 +314,8 @@ def main():
                 ppl = torch.exp(loss)
                 
                 # log stuff
-                logs = {"global_step": current_step, "epoch": epoch, "loss": loss.item(), "ppl": ppl.item(), "predicted_tokens": predicted_tokens}
                 if os.environ["WANDB_DISABLED"] == "false":
+                    logs = {"global_step": current_step, "epoch": epoch, "loss": loss.item(), "ppl": ppl.item(), "predicted_tokens": predicted_tokens}
                     wandb_logger.log(logs, step=current_step)
                 
                 print(
@@ -348,8 +346,10 @@ def main():
         os.makedirs(args.output_dir, exist_ok=True)
         model.save_pretrained(args.output_dir)
         model_config.save_pretrained(args.output_dir)
-        args.model_name_or_path = os.path.join(args.output_dir, "pytorch_model.bin")
+        args.tokenizer_name_or_path = os.path.join(args.output_dir, "tokenizer")
+        save_tokenizer(tokenizer, args.tokenizer_name_or_path)
         save_args(args, args.output_dir)
+
     # -------------------- end saving and clean-up --------------------
 
 

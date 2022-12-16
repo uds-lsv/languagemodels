@@ -24,6 +24,7 @@ TOKENIZATION_FUNCTIONS = {
 VOCAB_FILES_NAMES = {"vocab_file": "vocab.json"}
 
 
+
 class CharLevelTokenizer(PreTrainedTokenizer):
     """Simple character tokenizer.
         Args:
@@ -61,7 +62,7 @@ class CharLevelTokenizer(PreTrainedTokenizer):
             **kwargs,
         )
 
-        # TODO (js): This is quite different from e. g. the implementation of the BERT 
+        # This is quite different from e. g. the implementation of the BERT 
         # tokenizer (https://github.com/huggingface/transformers/blob/main/src/transformers/models/bert/tokenization_bert.py)
         # This class SHOULD behave exactly like the BERT tokenizer.
         if vocab_file is not None:
@@ -136,10 +137,10 @@ class CharLevelTokenizer(PreTrainedTokenizer):
             self._vocab_str_to_int[c] = len(self._vocab_str_to_int)
             self._vocab_int_to_str[len(self._vocab_int_to_str)] = c
 
-    def encode_batch(self, input, add_special_tokens=False):
+    def encode_batch(self, input, add_special_tokens=False, padding='max_length'):
         # Tokenizer.batch_decode_plus and the like are deprecated.
         encodings = self(input, add_special_tokens=add_special_tokens, 
-            padding='max_length', truncation=True)
+            padding=padding, truncation=True)
         self._add_items_to_encodings(encodings)
         return encodings
 
