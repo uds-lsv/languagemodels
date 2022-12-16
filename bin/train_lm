@@ -13,7 +13,11 @@ from transformers.tokenization_utils import BatchEncoding, PreTrainedTokenizer
 
 from languagemodels import LMFactory, TokenizerFactory
 from languagemodels.logging_utils import WandbLogger
-from languagemodels.scripting_utils import get_num_occurrences_in_tensor, repackage_hidden
+from languagemodels.scripting_utils import (
+    get_num_occurrences_in_tensor, 
+    repackage_hidden,
+    save_tokenizer
+)
 
 from languagemodels.utils import set_seed, get_timestamp, create_dir, save_args
 
@@ -342,12 +346,10 @@ def main():
         os.makedirs(args.output_dir, exist_ok=True)
         model.save_pretrained(args.output_dir)
         model_config.save_pretrained(args.output_dir)
-        args.model_name_or_path = os.path.join(args.output_dir, "pytorch_model.bin")
+        args.tokenizer_name_or_path = os.path.join(args.output_dir, "tokenizer")
+        save_tokenizer(tokenizer, args.tokenizer_name_or_path)
         save_args(args, args.output_dir)
-        if isinstance(tokenizer, PreTrainedTokenizer):
-            tokenizer.save_pretrained(args.output_dir)
-        else:
-            tokenizer.save(os.path.join(args.output_dir, "tokenizer.json"))
+
     # -------------------- end saving and clean-up --------------------
 
 

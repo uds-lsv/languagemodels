@@ -16,7 +16,11 @@ from transformers import default_data_collator
 from transformers.tokenization_utils_base import BatchEncoding
 
 from languagemodels import LMFactory, TokenizerFactory
-from languagemodels.scripting_utils import get_num_occurrences_in_tensor,  repackage_hidden
+from languagemodels.scripting_utils import (
+    get_num_occurrences_in_tensor,  
+    repackage_hidden,
+    ids_to_tokens
+)
 from languagemodels.utils import load_args
 
 
@@ -69,11 +73,11 @@ def main():
 
     config_path = os.path.join(args.model_dir, "config.json")
     model_path = os.path.join(args.model_dir, "pytorch_model.bin")
-    tokenizer_path = os.path.join(args.model_dir, "tokenizer.json")
+    tokenizer_path = os.path.join(args.model_dir, "tokenizer")
     
     raw_dataset = load_dataset(extension, data_files=data_files, **dataset_args)
 
-    tokenizer = TokenizerFactory.get_tokenizer(tokenizer_type="pretrained-tokenizer", \
+    tokenizer = TokenizerFactory.get_tokenizer(tokenizer_type=train_args.tokenizer_type, \
         tokenizer_name=train_args.tokenizer_name, tokenizer_name_or_path=tokenizer_path)
 
     # This is important because padded positions will be removed from the output dict
@@ -115,32 +119,32 @@ def main():
         return output_dict
 
 
-    def group_sequences(sequences):
+    def add_labels(sequences):
         # concatenate all sequences into a single sequence
-        concatenated_examples = {
-            k: list(chain(*sequences[k])) for k in sequences.keys()}
-        concatenated_examples["text"] = "".join(
-            concatenated_examples["text"]).split()
+        # concatenated_examples = {
+        #     k: list(chain(*sequences[k])) for k in sequences.keys()}
+        # concatenated_examples["text"] = "".join(
+        #     concatenated_examples["text"]).split()
 
-        actual_total_length = len(concatenated_examples["input_ids"])
+        # actual_total_length = len(concatenated_examples["input_ids"])
 
         # make sure data is divisible by block_size
         # as a result, we might ingore some tokens at the end of the sequence
         # TODO(mm): pad the last sequence instead
-        if actual_total_length >= block_size:
-            total_length = (actual_total_length // block_size) * block_size
-            print(
-                f"Deleting {actual_total_length - total_length} tokens")
+        # if actual_total_length >= block_size:
+        #     total_length = (actual_total_length // block_size) * block_size
+        #     print(
+        #         f"Deleting {actual_total_length - total_length} tokens")
 
         # group sequences into blocks of length block_size
         # depending on the stridge, these blocks might be overlapping or not
         # e.g. assume our sequence is <s> A B C D E F G </s> and we have a block_size of 2 and a stride of 1
         # --> [<s> A] [A B] [B C] [C D] [D E] [F G] [G </s>]
-        result = {
-            k: [values[i: i + block_size]
-                for i in range(0, total_length, stride)]
-            for k, values in concatenated_examples.items()
-        }
+        # result = {
+        #     k: [values[i: i + block_size]
+        #         for i in range(0, total_length, stride)]
+        #     for k, values in concatenated_examples.items()
+        # }
         # all models will shift the labels, so here it's fine to simply copy the inputs
         # for the bigram LM this is a bit of a waste of memory but we ignore this for now
         # result["labels"] = result["input_ids"].copy()
@@ -160,11 +164,11 @@ def main():
     )
 
     lm_datasets = tokenized_datasets.map(
-        group_sequences,
+        add_labels,
         batched=True,
         batch_size=1000,  # currently we group groups of 1000 samples together. For each of these groups we might delete some tokens
         num_proc=1,  # no parallel processing for now
-        desc=f"Grouping datasets into chunks of size {block_size}"
+        desc="adding labels"
     )
 
     test_dataset = lm_datasets["test"].with_format(
@@ -182,6 +186,10 @@ def main():
             test_dataset, shuffle=True, collate_fn=default_data_collator, batch_size=args.batch_size, drop_last=True)
     
     for batch_id, batch in enumerate(test_dataloader):
+        
+        actual_sequence_length = batch["input_ids"].shape[-1]
+        assert actual_sequence_length == block_size, \
+            f"Expected tokenized inputs to be of shape ({args.batch_size},{block_size}), got ({args.batch_size},{actual_sequence_length})"
 
         # init output dict
         out_dict = defaultdict(list)
@@ -215,9 +223,6 @@ def main():
         surprisal = torch.gather(surprisal, -1, word_ids)
         surprisal = surprisal.squeeze()
 
-        def ids_to_tokens(ids):
-            return [tokenizer.id_to_token(id) for id in ids]
-
         # Keep only surprisal values from unpadded positions. This is done by multiplying
         # the surprisal values by the attention mask, which is 0 at padded positions. 
         surprisal = surprisal.detach().cpu().numpy()
@@ -227,7 +232,7 @@ def main():
 
         # remove pad ids
         word_ids = [[id for id in ids if id != pad_id] for ids in word_ids.squeeze().cpu().numpy()]
-        tokens = [ids_to_tokens(ids) for ids in word_ids]
+        tokens = [ids_to_tokens(ids, tokenizer) for ids in word_ids]
         # special_tokens_mask = batch["special_tokens_mask"].cpu().numpy()
 
         for ids, toks, surp in zip(word_ids, tokens, surprisal):

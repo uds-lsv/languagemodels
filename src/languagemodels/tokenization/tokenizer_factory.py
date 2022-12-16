@@ -1,3 +1,5 @@
+import os
+
 from tokenizers import Tokenizer
 
 from languagemodels.tokenization import (
@@ -32,9 +34,10 @@ class TokenizerFactory():
                 tokenizer = tokenizer_cls.from_pretrained(tokenizer_name_or_path)
                 tokenizer.set_tokenization_function(tokenization_fun)
             # Tokenizers from the tokenizers library have a 
-            # their own method to load from a file
+            # their own method to load from a single json file
             elif tokenizer_cls == Tokenizer:
-                tokenizer = tokenizer_cls.from_file(tokenizer_name_or_path)
+                tokenizer_file = os.path.join(tokenizer_name_or_path, "tokenizer.json")
+                tokenizer = tokenizer_cls.from_file(tokenizer_file)
             else:
                 raise ValueError(f"Tokenizer {tokenizer_type} cannot be mapped to an appropriate class!")
 

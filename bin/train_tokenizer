@@ -139,8 +139,7 @@ if __name__ == '__main__':
 
     # save tokenizer
     os.makedirs(args.output_dir, exist_ok=True)  # make sure output dir exists
-    print("Done. Saving tokenizer to:", os.path.join(
-        args.output_dir, "tokenizer.json"))
+    print("Done. Saving tokenizer to:", args.output_dir)
     if isinstance(tokenizer, PreTrainedTokenizer):
         tokenizer.save_pretrained(args.output_dir)
     else:
