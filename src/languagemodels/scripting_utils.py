@@ -25,6 +25,8 @@ def get_num_occurrences_in_tensor(value: int, t: torch.Tensor) -> int:
 
 def save_tokenizer(tokenizer: Union[Tokenizer, PreTrainedTokenizer], \
     save_dir: Union[str, os.PathLike]) -> None:
+    if not os.path.exists(save_dir):
+        os.makedirs(save_dir)
     if isinstance(tokenizer, Tokenizer):
         tokenizer.save(os.path.join(save_dir, "tokenizer.json"))
     elif isinstance(tokenizer, PreTrainedTokenizer):

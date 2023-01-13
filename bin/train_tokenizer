@@ -5,8 +5,8 @@ import os
 from typing import List, Union
 
 from tokenizers import Tokenizer
-from tokenizers.models import WordLevel
-from tokenizers.trainers import WordLevelTrainer
+from tokenizers.models import WordLevel, BPE
+from tokenizers.trainers import WordLevelTrainer, BpeTrainer
 from tokenizers.pre_tokenizers import Whitespace
 from tokenizers.processors import TemplateProcessing
 from transformers.tokenization_utils import BatchEncoding, PreTrainedTokenizer
@@ -20,7 +20,7 @@ from languagemodels.tokenization import (
 
 
 SUPPORTED_TOKKENIZERS = [
-    "word-level", "character-level"
+    "word-level", "character-level", "bpe"
 ]
 
 
@@ -39,6 +39,33 @@ def _train_character_level_tokenizer(files):
     tokenizer.train(files)
 
     return tokenizer
+
+
+def _train_bpe_tokenizer(files):
+
+    tokenizer = Tokenizer(model=BPE(unk_token="unk"))
+    trainer = BpeTrainer(
+        vocab_size=args.vocab_size,
+        special_tokens=["<unk>", "<s>", "</s>", "<pad>"]
+    )
+    tokenizer.pre_tokenizer = Whitespace()
+    tokenizer.train(files, trainer)
+    tokenizer.post_processor = TemplateProcessing(
+        single="<s> $A </s>",
+        special_tokens=[(t, tokenizer.token_to_id(t)) for t in ["<s>", "</s>"]]
+    )
+    # ensure that the tokenizer produces only sequences fitting the block size of the model
+    tokenizer.enable_truncation(
+            max_length=args.block_size
+        )
+    # enable padding
+    tokenizer.enable_padding(
+        pad_id=tokenizer.token_to_id("<pad>"),
+        pad_token="<pad>",
+        length=args.block_size
+    )
+    return tokenizer
+
 
 def _train_word_level_tokenizer(files):
     """Train a word-level tokenizer on a list of files
@@ -123,6 +150,11 @@ if __name__ == '__main__':
     elif args.tokenizer_type == "character-level":
         print("Training character-level tokenizer ...")
         tokenizer = _train_character_level_tokenizer(files)
+    elif args.tokenizer_type == "bpe":
+        print("Training bpe tokenizer ...")
+        tokenizer = _train_bpe_tokenizer(files)
+    else:
+        raise ValueError(f"Unknown tokenizer type: {args.tokenizer_type}")
 
     # print some tokenized and encoded data
     encoded_data = tokenizer.encode_batch(data[:5])
