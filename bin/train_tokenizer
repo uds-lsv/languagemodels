@@ -43,7 +43,7 @@ def _train_character_level_tokenizer(files):
 
 def _train_bpe_tokenizer(files):
 
-    tokenizer = Tokenizer(model=BPE(unk_token="unk"))
+    tokenizer = Tokenizer(model=BPE(unk_token="<unk>"))
     trainer = BpeTrainer(
         vocab_size=args.vocab_size,
         special_tokens=["<unk>", "<s>", "</s>", "<pad>"]
