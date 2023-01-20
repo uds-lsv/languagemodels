@@ -19,7 +19,7 @@ from languagemodels.tokenization import (
 )
 
 
-SUPPORTED_TOKKENIZERS = [
+SUPPORTED_TOKENIZERS = [
     "word-level", "character-level", "bpe"
 ]
 
@@ -110,7 +110,7 @@ def _train_word_level_tokenizer(files):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="languagemodels")
     parser.add_argument('--tokenizer_type', type=str, default="word-level",
-                        choices=SUPPORTED_TOKKENIZERS,
+                        choices=SUPPORTED_TOKENIZERS,
                         help="directory which contains the input files")
     parser.add_argument('--input_files_dir', type=str,
                         help="directory which contains the input files")
