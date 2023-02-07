@@ -30,6 +30,9 @@ def parse_args():
     # data args
     parser.add_argument('--test_file', type=str, 
                         help="path to test data")
+    #in progress#
+    parser.add_argument('test-string')
+    ##
 
     # model weights, model config, command line args
     parser.add_argument('--model_dir', type=str, 
@@ -57,6 +60,8 @@ def main():
 
     train_args = load_args(args.model_dir)
 
+    args.device = "cuda" if torch.cuda.is_available() else "cpu"
+
     assert os.path.exists(args.model_dir)
 
     data_files = {
@@ -75,7 +80,14 @@ def main():
     model_path = os.path.join(args.model_dir, "pytorch_model.bin")
     tokenizer_path = os.path.join(args.model_dir, "tokenizer")
     
-    raw_dataset = load_dataset(extension, data_files=data_files, **dataset_args)
+    #in progress#
+    if args.test_file:
+        raw_dataset = load_dataset(extension, data_files=data_files, **dataset_args)
+    elif args.test_string:
+        #create dataset TODO
+        pass
+    ##
+    
 
     tokenizer = TokenizerFactory.get_tokenizer(tokenizer_type=train_args.tokenizer_type, \
         tokenizer_name=train_args.tokenizer_name, tokenizer_name_or_path=tokenizer_path)

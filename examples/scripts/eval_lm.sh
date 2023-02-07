@@ -1,8 +1,8 @@
 export CUDA_VISIBLE_DEVICES=0
 
-DATA_DIR="/languagemodels/examples/datasets/wikitext-103-raw"
-OUTPUT_DIR="/languagemodels/eval_results/wikitext-103-raw"
-SAVED_MODELS_DIR="/languagemodels/trained_models"
+DATA_DIR="datasets/wikitext-103-raw"
+OUTPUT_DIR="eval_results/wikitext-103-raw"
+SAVED_MODELS_DIR="trained_models"
 
 eval_lm \
     --test_file $DATA_DIR/wiki.test.txt \
