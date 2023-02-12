@@ -6,7 +6,7 @@ from itertools import chain
 import json
 import os
 
-from datasets import load_dataset
+from datasets import load_dataset, Dataset, DatasetDict
 import numpy as np
 from tokenizers import Tokenizer
 import torch
@@ -30,8 +30,8 @@ def parse_args():
     # data args
     parser.add_argument('--test_file', type=str, 
                         help="path to test data")
-    #in progress#
-    parser.add_argument('test-string')
+    parser.add_argument('--test_string', type=str,
+                        help='data as a JSON string, with key "text" and value ["rows", "of", "text"]')
     ##
 
     # model weights, model config, command line args
@@ -72,9 +72,10 @@ def main():
         os.makedirs(args.output_dir)
 
     dataset_args = {}
-    extension = args.test_file.split(".")[-1]
-    if extension == "txt":
-        extension = "text"
+    if args.test_file:
+        extension = args.test_file.split(".")[-1]
+        if extension == "txt":
+            extension = "text"
 
     config_path = os.path.join(args.model_dir, "config.json")
     model_path = os.path.join(args.model_dir, "pytorch_model.bin")
@@ -83,9 +84,28 @@ def main():
     #in progress#
     if args.test_file:
         raw_dataset = load_dataset(extension, data_files=data_files, **dataset_args)
+        
+        print("raw_dataset:", type(raw_dataset), raw_dataset)
+        # raw_dataset: <class 'datasets.dataset_dict.DatasetDict'> 
+        # DatasetDict({
+        #     test: Dataset({
+        #         features: ['text'],
+        #         num_rows: 4358
+        #     })
+        # })
     elif args.test_string:
-        #create dataset TODO
-        pass
+        data_dict = json.loads(args.test_string)
+        dataset_dict = {"test": Dataset.from_dict(data_dict)}
+        raw_dataset = DatasetDict(dataset_dict)
+        
+        print("raw_dataset from string:", raw_dataset)
+        # raw_dataset from string: 
+        # DatasetDict({
+        #   test: Dataset({
+        #       features: ['text'],
+        #       num_rows: 3
+        #   })
+        # })
     ##
     
 
@@ -191,12 +211,16 @@ def main():
     predicted_tokens = 0
     hidden_state = None
 
-    for i in range(10):
+    preview = 10 if len(test_dataset) > 10 else len(test_dataset)
+    print("preview test_dataset:")
+    for i in range(preview):
         print(test_dataset[i])
 
     test_dataloader = DataLoader(
             test_dataset, shuffle=True, collate_fn=default_data_collator, batch_size=args.batch_size, drop_last=True)
     
+    print("test_dataloader:", test_dataloader)
+
     for batch_id, batch in enumerate(test_dataloader):
         
         actual_sequence_length = batch["input_ids"].shape[-1]
