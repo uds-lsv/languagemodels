@@ -264,11 +264,12 @@ def main():
         surprisal = surprisal.detach().cpu().numpy()
         mask = batch["attention_mask"].detach().cpu().numpy()
         surprisal = [(s*mask) for s, mask in zip(surprisal, mask)]
-        surprisal = [s[np.where(s!=0)] for s in surprisal]
-
+        surprisal = [list(s[np.where(s!=0)]) for s in surprisal]
+        
         # remove pad ids
-        word_ids = [[id for id in ids if id != pad_id] for ids in word_ids.squeeze().cpu().numpy()]
+        word_ids = [[int(id) for id in ids if id != pad_id] for ids in word_ids.squeeze().cpu().numpy()]
         tokens = [ids_to_tokens(ids, tokenizer) for ids in word_ids]
+        
         # special_tokens_mask = batch["special_tokens_mask"].cpu().numpy()
 
         for ids, toks, surp in zip(word_ids, tokens, surprisal):
@@ -290,8 +291,7 @@ def main():
         out_path = os.path.join(args.output_dir, f"eval_batch_{batch_id}.json")
         print(f"Saving evaluation results to {out_path}")
         with open(out_path, 'w') as f:
-            out_str = json.dumps(out_dict.__str__(), ensure_ascii=False)
-            json.dump(out_str, f)
+            json.dump(out_dict, f)
 
 
 if __name__ == "__main__":
