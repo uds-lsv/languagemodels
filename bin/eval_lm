@@ -81,11 +81,10 @@ def main():
     model_path = os.path.join(args.model_dir, "pytorch_model.bin")
     tokenizer_path = os.path.join(args.model_dir, "tokenizer")
     
-    #in progress#
     if args.test_file:
         raw_dataset = load_dataset(extension, data_files=data_files, **dataset_args)
         
-        print("raw_dataset:", type(raw_dataset), raw_dataset)
+        # print("raw_dataset:", type(raw_dataset), raw_dataset)
         # raw_dataset: <class 'datasets.dataset_dict.DatasetDict'> 
         # DatasetDict({
         #     test: Dataset({
@@ -97,16 +96,6 @@ def main():
         data_dict = json.loads(args.test_string)
         dataset_dict = {"test": Dataset.from_dict(data_dict)}
         raw_dataset = DatasetDict(dataset_dict)
-        
-        print("raw_dataset from string:", raw_dataset)
-        # raw_dataset from string: 
-        # DatasetDict({
-        #   test: Dataset({
-        #       features: ['text'],
-        #       num_rows: 3
-        #   })
-        # })
-    ##
     
 
     tokenizer = TokenizerFactory.get_tokenizer(tokenizer_type=train_args.tokenizer_type, \
@@ -218,9 +207,6 @@ def main():
 
     test_dataloader = DataLoader(
             test_dataset, shuffle=True, collate_fn=default_data_collator, batch_size=args.batch_size, drop_last=False)
-    
-    print("test_dataloader:", test_dataloader)
-    print("check if enumerate(test_dataloader) is empty:", list(enumerate(test_dataloader)))
 
     for batch_id, batch in enumerate(test_dataloader):
         
