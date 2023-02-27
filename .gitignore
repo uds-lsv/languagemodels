@@ -6,4 +6,5 @@ logfiles/
 *.egg-info
 out/
 docker/
-eval_results/wikitext-103-raw
+build/
+eval_results/
