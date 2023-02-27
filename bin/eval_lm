@@ -43,6 +43,8 @@ def parse_args():
     # output dir
     parser.add_argument('--output_dir', type=str, 
                         help="path to the saved evaluation results")
+    parser.add_argument('--filename', type=str, default="results", 
+                        help="optional custom filename for {results}.tsv output")
     # Flags for saving different parts of the output (surprisal & tokens always saved)
     parser.add_argument("--save_word_ids", action='store_true')
     parser.add_argument("--save_word_offsets", action='store_true')
@@ -208,7 +210,7 @@ def main():
     test_dataloader = DataLoader(
             test_dataset, shuffle=True, collate_fn=default_data_collator, batch_size=args.batch_size, drop_last=True)
 
-    out_file_path = os.path.join(args.output_dir, f"results.tsv")
+    out_file_path = os.path.join(args.output_dir, f"{args.filename}.tsv")
     print(f"Saving evaluation results to {out_file_path}")
     
     with open(out_file_path, "w") as f:
