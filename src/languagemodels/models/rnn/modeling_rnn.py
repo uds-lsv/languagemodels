@@ -113,7 +113,7 @@ class RnnLM(PreTrainedModel):
     def from_config(cls, config, **kwargs):
         return cls._from_config(config, **kwargs)
 
-    def forward(self, input_ids, labels=None, hidden_state=None, **kwargs):
+    def forward(self, input_ids, labels=None, hidden_state=None, pad_id=-100, **kwargs):
         # get the input embeddings
         embeddings = self.wte(input_ids)
         embeddings = self.embedding_dropout(embeddings)
@@ -139,7 +139,7 @@ class RnnLM(PreTrainedModel):
             shift_labels = labels[..., 1:].contiguous()
 
             # compute loss
-            loss_fct = CrossEntropyLoss(ignore_index=-100)
+            loss_fct = CrossEntropyLoss(ignore_index=pad_id)
             loss = loss_fct(
                 shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
 
