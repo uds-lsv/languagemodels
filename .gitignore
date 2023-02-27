@@ -6,3 +6,5 @@ logfiles/
 *.egg-info
 out/
 docker/
+build/
+eval_results/
