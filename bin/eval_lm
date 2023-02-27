@@ -3,6 +3,7 @@
 import argparse
 from collections import defaultdict
 import os
+from tqdm import tqdm
 
 from datasets import load_dataset, Dataset, DatasetDict
 import numpy as np
@@ -210,7 +211,7 @@ def main():
     print(f"Saving evaluation results to {out_file_path}")
     
     with open(out_file_path, "w") as f:
-        for batch_id, batch in enumerate(test_dataloader):
+        for batch_id, batch in enumerate(tqdm(test_dataloader)):
             
             actual_sequence_length = batch["input_ids"].shape[-1]
             assert actual_sequence_length == block_size, \
