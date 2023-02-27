@@ -206,7 +206,7 @@ def main():
         print(test_dataset[i])
 
     test_dataloader = DataLoader(
-            test_dataset, shuffle=True, collate_fn=default_data_collator, batch_size=args.batch_size, drop_last=False)
+            test_dataset, shuffle=True, collate_fn=default_data_collator, batch_size=args.batch_size, drop_last=True) # NOTE: changed drop_last to True while testing multiple file downloading
 
     for batch_id, batch in enumerate(test_dataloader):
         
