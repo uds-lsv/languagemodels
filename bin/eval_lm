@@ -280,7 +280,7 @@ def main():
             # save results to tsv
             f.write("token_index\tsent_index\ttoken\ttoken_id\tsurprisal\n")
             for i, (sent_tokens, sent_surprisal, sent_ids) in enumerate(zip(words, surprisals, word_ids)):
-                for j, (tok, srp, id) in enumerate(zip(sent_tokens, sent_ids, sent_surprisal)):
+                for j, (tok, id, srp) in enumerate(zip(sent_tokens, sent_ids, sent_surprisal)):
                     out_str = f"{j}\t{i}\t{tok}\t{id}\t{srp}\n"
                     f.write(out_str)
 
