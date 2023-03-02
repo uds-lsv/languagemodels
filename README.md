@@ -50,6 +50,10 @@ docker run -it --rm --runtime=nvidia --pid=host --ipc=host --user $USER_NAME \
 
 - If you do not go with the Docker (recommended) method, install the appropriate version of Pytorch before installing the package: https://pytorch.org/get-started/locally/ 
 
+### Running scripts
+
+- Once the virtual environment is activated and the package has been installed, scripts from `bin/` can be run from the command line using `<name of script>`, e.g.: `eval_lm -h`
+
 ## Contributing
 
 | Contributor    | Email                        |

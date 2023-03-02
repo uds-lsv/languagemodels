@@ -2,9 +2,11 @@
 
 import argparse
 from collections import defaultdict
+import json
 import os
+from tqdm import tqdm
 
-from datasets import load_dataset
+from datasets import load_dataset, Dataset, DatasetDict
 import numpy as np
 from tokenizers import Tokenizer
 import torch
@@ -28,6 +30,9 @@ def parse_args():
     # data args
     parser.add_argument('--test_file', type=str, 
                         help="path to test data")
+    parser.add_argument('--test_string', type=str,
+                        help='data as a JSON string, with key "text" and value ["rows", "of", "text"]')
+    ##
 
     # model weights, model config, command line args
     parser.add_argument('--model_dir', type=str, 
@@ -38,6 +43,8 @@ def parse_args():
     # output dir
     parser.add_argument('--output_dir', type=str, 
                         help="path to the saved evaluation results")
+    parser.add_argument('--filename', type=str, default="results", 
+                        help="optional custom filename for {results}.tsv output")
     # Flags for saving different parts of the output (surprisal & tokens always saved)
     parser.add_argument("--save_word_ids", action='store_true')
     parser.add_argument("--save_word_offsets", action='store_true')
@@ -55,6 +62,8 @@ def main():
 
     train_args = load_args(args.model_dir)
 
+    args.device = "cuda" if torch.cuda.is_available() else "cpu"
+
     assert os.path.exists(args.model_dir)
 
     data_files = {
@@ -65,15 +74,31 @@ def main():
         os.makedirs(args.output_dir)
 
     dataset_args = {}
-    extension = args.test_file.split(".")[-1]
-    if extension == "txt":
-        extension = "text"
+    if args.test_file:
+        extension = args.test_file.split(".")[-1]
+        if extension == "txt":
+            extension = "text"
 
     config_path = os.path.join(args.model_dir, "config.json")
     model_path = os.path.join(args.model_dir, "pytorch_model.bin")
     tokenizer_path = os.path.join(args.model_dir, "tokenizer")
     
-    raw_dataset = load_dataset(extension, data_files=data_files, **dataset_args)
+    if args.test_file:
+        raw_dataset = load_dataset(extension, data_files=data_files, **dataset_args)
+        
+        # print("raw_dataset:", type(raw_dataset), raw_dataset)
+        # raw_dataset: <class 'datasets.dataset_dict.DatasetDict'> 
+        # DatasetDict({
+        #     test: Dataset({
+        #         features: ['text'],
+        #         num_rows: 4358
+        #     })
+        # })
+    elif args.test_string:
+        data_dict = json.loads(args.test_string)
+        dataset_dict = {"test": Dataset.from_dict(data_dict)}
+        raw_dataset = DatasetDict(dataset_dict)
+    
 
     tokenizer = TokenizerFactory.get_tokenizer(tokenizer_type=train_args.tokenizer_type, \
         tokenizer_name=train_args.tokenizer_name, tokenizer_name_or_path=tokenizer_path)
@@ -177,17 +202,21 @@ def main():
     predicted_tokens = 0
     hidden_state = None
 
-    for i in range(10):
+    preview = 10 if len(test_dataset) > 10 else len(test_dataset)
+    print("preview test_dataset:")
+    for i in range(preview):
         print(test_dataset[i])
 
     test_dataloader = DataLoader(
             test_dataset, shuffle=True, collate_fn=default_data_collator, batch_size=args.batch_size, drop_last=True)
 
-    out_file_path = os.path.join(args.output_dir, f"results.tsv")
+    out_file_path = os.path.join(args.output_dir, f"{args.filename}.tsv")
     print(f"Saving evaluation results to {out_file_path}")
     
     with open(out_file_path, "w") as f:
-        for batch_id, batch in enumerate(test_dataloader):
+        f.write("token_index\tsent_index\ttoken\ttoken_id\tsurprisal\n")
+        
+        for batch_id, batch in enumerate(tqdm(test_dataloader)):
             
             actual_sequence_length = batch["input_ids"].shape[-1]
             assert actual_sequence_length == block_size, \
@@ -253,9 +282,8 @@ def main():
                 pass
 
             # save results to tsv
-            f.write("token_index\tsent_index\ttoken\ttoken_id\tsurprisal\n")
             for i, (sent_tokens, sent_surprisal, sent_ids) in enumerate(zip(words, surprisals, word_ids)):
-                for j, (tok, srp, id) in enumerate(zip(sent_tokens, sent_ids, sent_surprisal)):
+                for j, (tok, id, srp) in enumerate(zip(sent_tokens, sent_ids, sent_surprisal)):
                     out_str = f"{j}\t{i}\t{tok}\t{id}\t{srp}\n"
                     f.write(out_str)
 
