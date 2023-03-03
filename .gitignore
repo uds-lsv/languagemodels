@@ -8,3 +8,5 @@ out/
 docker/
 build/
 eval_results/
+models/
+tokenizers/
