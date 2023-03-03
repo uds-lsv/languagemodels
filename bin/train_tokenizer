@@ -40,6 +40,30 @@ def _train_character_level_tokenizer(files):
 
     return tokenizer
 
+def _train_unigram_tokenizer(files):
+
+    tokenizer = Tokenizer(model=Unigram())
+    trainer = UnigramTrainer(
+        vocab_size=args.vocab_size,
+        special_tokens=["<unk>", "<s>", "</s>", "<pad>"]
+    )
+    tokenizer.pre_tokenizer = Whitespace()
+    tokenizer.train(files, trainer)
+    tokenizer.post_processor = TemplateProcessing(
+        single="<s> $A </s>",
+        special_tokens=[(t, tokenizer.token_to_id(t)) for t in ["<s>", "</s>"]]
+    )
+    
+    tokenizer.enable_truncation(
+            max_length=args.block_size
+        )
+   
+    tokenizer.enable_padding(
+        pad_id=tokenizer.token_to_id("<pad>"),
+        pad_token="<pad>",
+        length=args.block_size
+    )
+    return tokenizer
 
 def _train_bpe_tokenizer(files):
 
@@ -153,6 +177,9 @@ if __name__ == '__main__':
     elif args.tokenizer_type == "bpe":
         print("Training bpe tokenizer ...")
         tokenizer = _train_bpe_tokenizer(files)
+    elif args.tokenizer_type == "unigram":
+        print("Training unigram tokenizer ...")
+        tokenizer = _train_unigram_tokenizer(files)
     else:
         raise ValueError(f"Unknown tokenizer type: {args.tokenizer_type}")
 
