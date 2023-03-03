@@ -89,30 +89,32 @@ def parse_args():
     return args
 
 
-def evaluate(model, validation_dataset, args):
+def evaluate(model, validation_dataset, pad_id, args):
     model.eval()
-    # create validation dataloader
+
+     # create validation dataloader
     validation_dataloader = DataLoader(
-        validation_dataset, shuffle=False, collate_fn=default_data_collator, batch_size=args.batch_size)
+        validation_dataset, shuffle=False, collate_fn=default_data_collator, batch_size=args.batch_size, drop_last=True)
 
-    losses, perplexities = [], []
-    for batch in validation_dataloader:
-
-        # put data on device
-        batch = {k: v.to(args.device) for k, v in batch.items()}
-
+    with torch.no_grad():
         hidden_state = None
-        with torch.no_grad():
+        losses, perplexities = [], []
+        for batch in validation_dataloader:
+
+            # put data on device
+            batch = {k: v.to(args.device) for k, v in batch.items()}
+
             _, loss, _ = model.forward(
-                            input_ids=batch["input_ids"], labels=batch["labels"], hidden_state=hidden_state)
+                            input_ids=batch["input_ids"], labels=batch["labels"], hidden_state=hidden_state, pad_id=pad_id)
+            
             losses.append(loss.item())
             perplexities.append(torch.exp(loss).item())
-    
-    model.train()  # put model back in training mode
-    results = {
+        
+    model.train()        
+    eval_results = {
         "valid_loss": np.mean(losses), "valid_ppl": np.mean(perplexities)
     }
-    return results
+    return eval_results
 
 
 def main():
@@ -256,8 +258,11 @@ def main():
         type="torch", columns=["input_ids", "labels", "attention_mask", ])
 
     # print some examples from the training data
-    for idx in range(5):
+    for idx in range(2):
         print(train_dataset[idx])
+
+    for idx in range(2):
+        print(validation_dataset[idx])
 
     # -------------------- end process data --------------------
 
@@ -286,7 +291,8 @@ def main():
     model.train()  # put model in training mode
     while continue_training:
         # evaluate model before training
-        eval_results = evaluate(model, validation_dataset, args)
+        # eval_results = evaluate(model, validation_dataset, args)
+
 
         # ---> beginning of 1 epoch
         train_dataloader = DataLoader(
@@ -294,6 +300,9 @@ def main():
 
         print(f"--- Starting epoch {epoch} ---")
         for batch in train_dataloader:
+
+            model.train()  # put model back in training mode
+
             start_time = time.time()
 
             # put data on device
@@ -307,7 +316,6 @@ def main():
             if final_hidden_state is not None:
                 # detach the hidden state to avoid backpropagating through all batches
                 hidden_state = repackage_hidden(final_hidden_state)
-
 
             predicted_tokens += batch["attention_mask"].sum().sum()
 
@@ -331,7 +339,9 @@ def main():
                     f"step: {current_step:>8} | train_loss: {loss.item():.4f} | train_ppl: {ppl.item():.4f} | predicted tokens: {predicted_tokens:>10} | step time: {delta:.2f}ms")
 
             if current_step % args.eval_steps == 0:
-                eval_results = evaluate(model, validation_dataset, args)
+
+                eval_results = evaluate(model, validation_dataset, pad_id, args)
+
                 # log stuff
                 if os.environ["WANDB_DISABLED"] == "false":
                     logs = {"global_step": current_step, "epoch": epoch, "valid_loss": eval_results["valid_loss"], "valid_ppl": eval_results["valid_ppl"]}
