@@ -142,6 +142,8 @@ def main():
     
     tokenizer = TokenizerFactory.get_tokenizer(tokenizer_type=args.tokenizer_type, \
         tokenizer_name=args.tokenizer_name, tokenizer_name_or_path=args.tokenizer_name_or_path)
+    
+    pad_id = tokenizer.token_to_id("<pad>")
 
     # load model
     model, model_config = LMFactory.get_lm(model_type=args.model_type, config_name_or_path=args.config_name_or_path,
@@ -285,22 +287,15 @@ def main():
 
             # run forward pass and compute loss
             model.zero_grad(set_to_none=True)
-            if args.model_type == "bert":
-                logits, loss, final_hidden_state = model.forward(
-                    input_ids=batch["input_ids"])
-            else:
-                logits, loss, final_hidden_state = model.forward(
-                        input_ids=batch["input_ids"], labels=batch["labels"], hidden_state=hidden_state)
+            logits, loss, final_hidden_state = model.forward(
+                    input_ids=batch["input_ids"], labels=batch["labels"], hidden_state=hidden_state, pad_id=pad_id)
 
             if final_hidden_state is not None:
                 # detach the hidden state to avoid backpropagating through all batches
                 hidden_state = repackage_hidden(final_hidden_state)
 
-            if args.model_type == "bert":
-                mask_count = get_num_occurrences_in_tensor(tokenizer.mask_token_id, batch["labels"])
-                predicted_tokens += mask_count
-            else:
-                predicted_tokens += args.batch_size * (block_size - 1)
+
+            predicted_tokens += batch["attention_mask"].sum().sum()
 
             # compute gradients and update weights
             loss.backward()
