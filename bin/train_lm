@@ -53,6 +53,8 @@ def parse_args():
     # optimizer args
     parser.add_argument('--learning_rate', type=float, default=1e-5,
                         help="learning rate")
+    parser.add_argument('--weight_decay', type=float, default=0.0,
+                        help="learning rate")
 
     # training args
     parser.add_argument('--batch_size', type=int, default=100,
@@ -63,6 +65,8 @@ def parse_args():
                         help="evaluate every logging_steps steps")
     parser.add_argument('--max_steps', type=int, default=1000,
                         help="maximum number of steps to train")
+    parser.add_argument('--max_epochs', type=int, default=100,
+                        help="maximum number of epochs to train")
 
     # wandb args
     parser.add_argument('--wandb_project_name', type=str,
@@ -99,6 +103,9 @@ def evaluate(model, validation_dataset, pad_id, args):
     with torch.no_grad():
         hidden_state = None
         losses, perplexities = [], []
+
+        start_time = time.time()
+
         for batch in validation_dataloader:
 
             # put data on device
@@ -109,10 +116,13 @@ def evaluate(model, validation_dataset, pad_id, args):
             
             losses.append(loss.item())
             perplexities.append(torch.exp(loss).item())
+
+        end_time = time.time()
+        delta = (end_time - start_time) * 1000  # ms
         
     model.train()        
     eval_results = {
-        "valid_loss": np.mean(losses), "valid_ppl": np.mean(perplexities)
+        "valid_loss": np.mean(losses), "valid_ppl": np.mean(perplexities), "valid_step_time": delta
     }
     return eval_results
 
@@ -270,7 +280,7 @@ def main():
 
     # initialize optimizer
     optimizer = torch.optim.AdamW(
-        params=model.parameters(), lr=args.learning_rate, weight_decay=0.0, betas=(0.9, 0.99), eps=1e-8
+        params=model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay, betas=(0.9, 0.99), eps=1e-8
     )
 
     # -------------------- end optimizer --------------------
@@ -336,7 +346,7 @@ def main():
                     wandb_logger.log(logs, step=current_step)
                 
                 print(
-                    f"step: {current_step:>8} | train_loss: {loss.item():.4f} | train_ppl: {ppl.item():.4f} | predicted tokens: {predicted_tokens:>10} | step time: {delta:.2f}ms")
+                    f"step: {current_step:>8} | train loss: {loss.item():.4f} | train ppl: {ppl.item():.4f} | predicted tokens: {predicted_tokens:>10} | train step time: {delta:.2f}ms")
 
             if current_step % args.eval_steps == 0:
 
@@ -348,16 +358,20 @@ def main():
                     wandb_logger.log(logs, step=current_step)
                 
                 print(
-                    f"valid_loss: {eval_results['valid_loss']:.4f} | valid_ppl: {eval_results['valid_ppl']:.4f} | predicted tokens: {predicted_tokens:>10} | step time: {delta:.2f}ms")
+                    f"valid_loss: {eval_results['valid_loss']:.4f} | valid_ppl: {eval_results['valid_ppl']:.4f} | valid step time: {eval_results['valid_step_time']:.2f}ms")
 
             if current_step == args.max_steps:
                 continue_training = False  # stop training
                 break
-
+        
         # ---> end of 1 epoch
         if continue_training:
             print(f"--- End of epoch {epoch} ---")
             epoch += 1
+
+        # stop training if max number of epochs was reached
+        if epoch >= args.max_epochs:
+            continue_training = False
 
     # ---> end of training
     print(f"\n+++ End of training +++\n")
