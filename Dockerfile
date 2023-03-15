@@ -38,23 +38,20 @@ ENV USER_GROUP="users"
 RUN mkdir /home/$USER_NAME 
 RUN useradd -l -d /home/$USER_NAME -u $USER_UID -g $USER_GROUP $USER_NAME
 
-# Add location of binaries to path (for LM & tokenizer train scripts)
-ENV PATH=$PATH:/home/${USER_NAME}/.local/bin
+# # Add location of binaries to path (for LM & tokenizer train scripts)
+# ENV PATH=$PATH:/home/${USER_NAME}/.local/bin
 
-# Setup VSCode stuff (comment when not using vscode)
-RUN mkdir /home/$USER_NAME/.vscode-server 
-RUN mkdir /home/$USER_NAME/.vscode-server-insiders
+# # Setup VSCode stuff (comment when not using vscode)
+# RUN mkdir /home/$USER_NAME/.vscode-server 
+# RUN mkdir /home/$USER_NAME/.vscode-server-insiders
 
-# Change owner of home dir
-RUN chown -R ${USER_UID}:${USER_GID} /home/$USER_NAME/
+# # Change owner of home dir
+# RUN chown -R ${USER_UID}:${USER_GID} /home/$USER_NAME/
 
-# Change owner of conda/python dir
-# - This is needed to be able to install transformers inside the container using pip -e 
-RUN chown ${USER_UID}:${USER_GID} /opt/conda/lib/python3.8/site-packages/
-RUN chown -R ${USER_UID}:${USER_GID} /opt/conda/bin/
-
-# Set workdir when starting container
-WORKDIR /languagemodels
+# # Change owner of conda/python dir
+# # - This is needed to be able to install transformers inside the container using pip -e 
+# RUN chown ${USER_UID}:${USER_GID} /opt/conda/lib/python3.8/site-packages/
+# RUN chown -R ${USER_UID}:${USER_GID} /opt/conda/bin/
 
 # TODO: install the package in development mode when run
 # CMD ["/bin/bash"]

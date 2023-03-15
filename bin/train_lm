@@ -6,6 +6,7 @@ from itertools import chain
 import os
 
 from datasets import load_dataset
+import numpy as np
 import torch
 from torch.utils.data.dataloader import DataLoader
 from transformers import default_data_collator
@@ -88,17 +89,32 @@ def parse_args():
     return args
 
 
-def evaluate(model, validation_dataset, args):
+def evaluate(model, validation_dataset, pad_id, args):
     model.eval()
-    # create validation dataloader
+
+     # create validation dataloader
     validation_dataloader = DataLoader(
-        validation_dataset, shuffle=False, collate_fn=default_data_collator, batch_size=args.batch_size)
+        validation_dataset, shuffle=False, collate_fn=default_data_collator, batch_size=args.batch_size, drop_last=True)
 
-    # TODO(mm): implement
+    with torch.no_grad():
+        hidden_state = None
+        losses, perplexities = [], []
+        for batch in validation_dataloader:
 
-    model.train()  # put model back in training mode
-    results = {}
-    return results
+            # put data on device
+            batch = {k: v.to(args.device) for k, v in batch.items()}
+
+            _, loss, _ = model.forward(
+                            input_ids=batch["input_ids"], labels=batch["labels"], hidden_state=hidden_state, pad_id=pad_id)
+            
+            losses.append(loss.item())
+            perplexities.append(torch.exp(loss).item())
+        
+    model.train()        
+    eval_results = {
+        "valid_loss": np.mean(losses), "valid_ppl": np.mean(perplexities)
+    }
+    return eval_results
 
 
 def main():
@@ -193,30 +209,30 @@ def main():
 
     def group_sequences(sequences):
         # concatenate all sequences into a single sequence
-        concatenated_examples = {
-            k: list(chain(*sequences[k])) for k in sequences.keys()}
-        concatenated_examples["text"] = "".join(
-            concatenated_examples["text"]).split()
+        # concatenated_examples = {
+        #     k: list(chain(*sequences[k])) for k in sequences.keys()}
+        # concatenated_examples["text"] = "".join(
+        #     concatenated_examples["text"]).split()
 
-        actual_total_length = len(concatenated_examples["input_ids"])
+        # actual_total_length = len(concatenated_examples["input_ids"])
 
         # make sure data is divisible by block_size
         # as a result, we might ingore some tokens at the end of the sequence
         # TODO(mm): pad the last sequence instead
-        if actual_total_length >= block_size:
-            total_length = (actual_total_length // block_size) * block_size
-            print(
-                f"Deleting {actual_total_length - total_length} tokens")
+        # if actual_total_length >= block_size:
+        #     total_length = (actual_total_length // block_size) * block_size
+        #     print(
+        #         f"Deleting {actual_total_length - total_length} tokens")
 
         # group sequences into blocks of length block_size
         # depending on the stridge, these blocks might be overlapping or not
         # e.g. assume our sequence is <s> A B C D E F G </s> and we have a block_size of 2 and a stride of 1
         # --> [<s> A] [A B] [B C] [C D] [D E] [F G] [G </s>]
-        result = {
-            k: [values[i: i + block_size]
-                for i in range(0, total_length, stride)]
-            for k, values in concatenated_examples.items()
-        }
+        # result = {
+        #     k: [values[i: i + block_size]
+        #         for i in range(0, total_length, stride)]
+        #     for k, values in concatenated_examples.items()
+        # }
 
         # all models will shift the labels, so here it's fine to simply copy the inputs
         # for the bigram LM this is a bit of a waste of memory but we ignore this for now
@@ -242,8 +258,11 @@ def main():
         type="torch", columns=["input_ids", "labels", "attention_mask", ])
 
     # print some examples from the training data
-    for idx in range(5):
+    for idx in range(2):
         print(train_dataset[idx])
+
+    for idx in range(2):
+        print(validation_dataset[idx])
 
     # -------------------- end process data --------------------
 
@@ -272,7 +291,8 @@ def main():
     model.train()  # put model in training mode
     while continue_training:
         # evaluate model before training
-        eval_results = evaluate(model, validation_dataset, args)
+        # eval_results = evaluate(model, validation_dataset, args)
+
 
         # ---> beginning of 1 epoch
         train_dataloader = DataLoader(
@@ -280,6 +300,9 @@ def main():
 
         print(f"--- Starting epoch {epoch} ---")
         for batch in train_dataloader:
+
+            model.train()  # put model back in training mode
+
             start_time = time.time()
 
             # put data on device
@@ -293,7 +316,6 @@ def main():
             if final_hidden_state is not None:
                 # detach the hidden state to avoid backpropagating through all batches
                 hidden_state = repackage_hidden(final_hidden_state)
-
 
             predicted_tokens += batch["attention_mask"].sum().sum()
 
@@ -310,14 +332,23 @@ def main():
                 
                 # log stuff
                 if os.environ["WANDB_DISABLED"] == "false":
-                    logs = {"global_step": current_step, "epoch": epoch, "loss": loss.item(), "ppl": ppl.item(), "predicted_tokens": predicted_tokens}
+                    logs = {"global_step": current_step, "epoch": epoch, "train_loss": loss.item(), "train_ppl": ppl.item(), "predicted_tokens": predicted_tokens}
                     wandb_logger.log(logs, step=current_step)
                 
                 print(
-                    f"step: {current_step:>8} | loss: {loss.item():.4f} | ppl: {ppl.item():.4f} | predicted tokens: {predicted_tokens:>10} | step time: {delta:.2f}ms")
+                    f"step: {current_step:>8} | train_loss: {loss.item():.4f} | train_ppl: {ppl.item():.4f} | predicted tokens: {predicted_tokens:>10} | step time: {delta:.2f}ms")
 
             if current_step % args.eval_steps == 0:
-                eval_results = evaluate(model, validation_dataset, args)
+
+                eval_results = evaluate(model, validation_dataset, pad_id, args)
+
+                # log stuff
+                if os.environ["WANDB_DISABLED"] == "false":
+                    logs = {"global_step": current_step, "epoch": epoch, "valid_loss": eval_results["valid_loss"], "valid_ppl": eval_results["valid_ppl"]}
+                    wandb_logger.log(logs, step=current_step)
+                
+                print(
+                    f"valid_loss: {eval_results['valid_loss']:.4f} | valid_ppl: {eval_results['valid_ppl']:.4f} | predicted tokens: {predicted_tokens:>10} | step time: {delta:.2f}ms")
 
             if current_step == args.max_steps:
                 continue_training = False  # stop training
