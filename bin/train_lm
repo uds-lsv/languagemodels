@@ -9,7 +9,11 @@ from datasets import load_dataset
 import numpy as np
 import torch
 from torch.utils.data.dataloader import DataLoader
-from transformers import default_data_collator
+from transformers import (
+    default_data_collator,
+    SchedulerType,
+    get_scheduler,
+)
 from transformers.tokenization_utils import BatchEncoding, PreTrainedTokenizer
 
 from languagemodels import LMFactory, TokenizerFactory
@@ -63,10 +67,20 @@ def parse_args():
                         help="log every logging_steps steps")
     parser.add_argument('--eval_steps', type=int, default=100,
                         help="evaluate every logging_steps steps")
-    parser.add_argument('--max_steps', type=int, default=1000,
+    parser.add_argument('--max_train_steps', type=int, default=1000,
                         help="maximum number of steps to train")
-    parser.add_argument('--max_epochs', type=int, default=100,
-                        help="maximum number of epochs to train")
+
+    # learning rate scheduler args
+    parser.add_argument(
+        "--lr_scheduler_type",
+        type=str,
+        default="constant_with_warmup",
+        help="The scheduler type to use.",
+        choices=["linear", "cosine", "cosine_with_restarts", "polynomial", "constant", "constant_with_warmup"],
+    )
+    parser.add_argument(
+        "--num_warmup_steps", type=int, default=0, help="Number of steps for the warmup in the lr scheduler."
+    )
 
     # wandb args
     parser.add_argument('--wandb_project_name', type=str,
@@ -283,6 +297,14 @@ def main():
         params=model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay, betas=(0.9, 0.99), eps=1e-8
     )
 
+    # initialize learning rate scheduler
+    lr_scheduler = get_scheduler(
+        name=args.lr_scheduler_type,
+        optimizer=optimizer,
+        num_warmup_steps=args.num_warmup_steps,
+        num_training_steps=args.max_train_steps,
+    )
+
     # -------------------- end optimizer --------------------
 
     # -------------------- training loop --------------------
@@ -300,9 +322,6 @@ def main():
     hidden_state = None
     model.train()  # put model in training mode
     while continue_training:
-        # evaluate model before training
-        # eval_results = evaluate(model, validation_dataset, args)
-
 
         # ---> beginning of 1 epoch
         train_dataloader = DataLoader(
@@ -332,6 +351,7 @@ def main():
             # compute gradients and update weights
             loss.backward()
             optimizer.step()
+            lr_scheduler.step()
             current_step += 1
 
             end_time = time.time()
@@ -342,11 +362,11 @@ def main():
                 
                 # log stuff
                 if os.environ["WANDB_DISABLED"] == "false":
-                    logs = {"global_step": current_step, "epoch": epoch, "train_loss": loss.item(), "train_ppl": ppl.item(), "predicted_tokens": predicted_tokens}
+                    logs = {"global_step": current_step, "epoch": epoch, "train_loss": loss.item(), "train_ppl": ppl.item(), "learning_rate": lr_scheduler.get_last_lr()[0], "predicted_tokens": predicted_tokens}
                     wandb_logger.log(logs, step=current_step)
                 
                 print(
-                    f"step: {current_step:>8} | train loss: {loss.item():.4f} | train ppl: {ppl.item():.4f} | predicted tokens: {predicted_tokens:>10} | train step time: {delta:.2f}ms")
+                    f"step: {current_step:>8} | train loss: {loss.item():.4f} | train ppl: {ppl.item():.4f} | learning_rate: {lr_scheduler.get_last_lr()[0]} |,predicted tokens: {predicted_tokens:>10} | train step time: {delta:.2f}ms")
 
             if current_step % args.eval_steps == 0:
 
@@ -360,7 +380,7 @@ def main():
                 print(
                     f"valid_loss: {eval_results['valid_loss']:.4f} | valid_ppl: {eval_results['valid_ppl']:.4f} | valid step time: {eval_results['valid_step_time']:.2f}ms")
 
-            if current_step == args.max_steps:
+            if current_step == args.max_train_steps:
                 continue_training = False  # stop training
                 break
         
@@ -368,10 +388,6 @@ def main():
         if continue_training:
             print(f"--- End of epoch {epoch} ---")
             epoch += 1
-
-        # stop training if max number of epochs was reached
-        if epoch >= args.max_epochs:
-            continue_training = False
 
     # ---> end of training
     print(f"\n+++ End of training +++\n")
