@@ -11,7 +11,6 @@ import torch
 from torch.utils.data.dataloader import DataLoader
 from transformers import (
     default_data_collator,
-    SchedulerType,
     get_scheduler,
 )
 from transformers.tokenization_utils import BatchEncoding, PreTrainedTokenizer
@@ -19,7 +18,6 @@ from transformers.tokenization_utils import BatchEncoding, PreTrainedTokenizer
 from languagemodels import LMFactory, TokenizerFactory
 from languagemodels.logging_utils import WandbLogger
 from languagemodels.scripting_utils import (
-    get_num_occurrences_in_tensor, 
     repackage_hidden,
     save_tokenizer
 )
@@ -96,6 +94,7 @@ def parse_args():
     parser.add_argument('--device', type=str, default='cpu',
                         help="device to use for compute, examples: cpu|cuda|cuda:0")
     parser.add_argument('--seed', type=int, default=123, help="seed")
+    parser.add_argument('--save_every_k_steps', type=int, default=0, help="model will be saved after k steps")
 
     args = parser.parse_args()
 
@@ -104,6 +103,8 @@ def parse_args():
     if os.environ["WANDB_DISABLED"] == "false":  # we are using wandb for logging
         assert args.wandb_project_name is not None, "when using wandb, you need to specify a project name"
 
+    if args.save_every_k_steps is not None:
+        assert args.output_dir is not None, "output dir not specified!"
     return args
 
 
@@ -141,6 +142,27 @@ def evaluate(model, validation_dataset, pad_id, args):
     return eval_results
 
 
+def save_model_and_train_args(model, tokenizer, model_config, args):
+    # make sure output dir exists
+    os.makedirs(args.output_dir, exist_ok=True)
+    model.save_pretrained(args.output_dir)
+    model_config.save_pretrained(args.output_dir)
+    tokenizer_dir = os.path.join(args.output_dir, "tokenizer")
+    save_tokenizer(tokenizer, tokenizer_dir)
+    save_args(args, args.output_dir)
+    print(f"Saved final model to {args.output_dir}")
+
+
+def save_model_at_k_steps(model, tokenizer, model_config, args, current_step):
+    output_dir_at_k = os.path.join(args.output_dir, str(current_step))
+    os.makedirs(output_dir_at_k)
+    model.save_pretrained(output_dir_at_k)
+    model_config.save_pretrained(output_dir_at_k)
+    tokenizer_dir = os.path.join(output_dir_at_k, "tokenizer")
+    save_tokenizer(tokenizer, tokenizer_dir)
+    print(f"Saved model checkpoint to {output_dir_at_k}")
+
+
 def main():
     args = parse_args()
     # -------------------- setup --------------------
@@ -151,6 +173,7 @@ def main():
     # create a unique dir for the current run
     dir_name = f"run_{TIMESTAMP}"
     args.output_dir = create_dir(args.output_dir, dir_name)
+
     if os.environ["WANDB_DISABLED"] == "false":
         args.wandb_output_dir = create_dir(args.output_dir, "wandb")
 
@@ -357,6 +380,8 @@ def main():
             end_time = time.time()
             delta = (end_time - start_time) * 1000  # ms
 
+
+            # -------------------- start logging --------------------
             if current_step % args.logging_steps == 0:
                 ppl = torch.exp(loss)
                 
@@ -366,7 +391,7 @@ def main():
                     wandb_logger.log(logs, step=current_step)
                 
                 print(
-                    f"step: {current_step:>8} | train loss: {loss.item():.4f} | train ppl: {ppl.item():.4f} | learning_rate: {lr_scheduler.get_last_lr()[0]} |,predicted tokens: {predicted_tokens:>10} | train step time: {delta:.2f}ms")
+                    f"step: {current_step:>8} | train loss: {loss.item():.4f} | train ppl: {ppl.item():.4f} | learning_rate: {lr_scheduler.get_last_lr()[0]} | predicted tokens: {predicted_tokens} | train step time: {delta:.2f}ms")
 
             if current_step % args.eval_steps == 0:
 
@@ -380,6 +405,11 @@ def main():
                 print(
                     f"valid_loss: {eval_results['valid_loss']:.4f} | valid_ppl: {eval_results['valid_ppl']:.4f} | valid step time: {eval_results['valid_step_time']:.2f}ms")
 
+            # -------------------- end logging --------------------
+
+            if current_step % args.save_every_k_steps == 0:
+                save_model_at_k_steps(model, tokenizer, model_config, args, current_step)
+            
             if current_step == args.max_train_steps:
                 continue_training = False  # stop training
                 break
@@ -398,13 +428,7 @@ def main():
 
     # save model, tokenizer, args
     if args.output_dir is not None:
-        # make sure output dir exists
-        os.makedirs(args.output_dir, exist_ok=True)
-        model.save_pretrained(args.output_dir)
-        model_config.save_pretrained(args.output_dir)
-        args.tokenizer_name_or_path = os.path.join(args.output_dir, "tokenizer")
-        save_tokenizer(tokenizer, args.tokenizer_name_or_path)
-        save_args(args, args.output_dir)
+        save_model_and_train_args(model, tokenizer, model_config, args)
 
     # -------------------- end saving and clean-up --------------------
 
