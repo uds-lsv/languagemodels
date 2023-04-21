@@ -416,7 +416,7 @@ def main():
                 continue_training = False  # stop training
                 break
         
-        print(f"--- End of epoch {epoch} ---")
+            print(f"--- End of epoch {epoch} ---")
 
         # stop training if maximum number of epoch is reached
         if epoch == args.max_epochs:
