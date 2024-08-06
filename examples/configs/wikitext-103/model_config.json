@@ -1,0 +1,12 @@
+{
+    "vocab_size": 10000,
+    "block_size": 128,
+    "cell_type": "lstm",
+    "model_type": "rnn-lm",
+    "embedding_dim": 384,
+    "hidden_dim": 1024,
+    "num_layers": 4,
+    "add_bias": true,
+    "dropout": 0.1,
+    "embedding_dropout": 0.1
+}

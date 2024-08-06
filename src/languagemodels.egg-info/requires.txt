@@ -1,0 +1,14 @@
+wheel
+autopep8
+numpy
+pandas
+matplotlib
+ipython
+notebook
+jupyter
+ipywidgets
+pytest
+wandb
+datasets==2.18.0
+tokenizers==0.15.2
+transformers==4.38.2

@@ -1,0 +1,17 @@
+Metadata-Version: 2.1
+Name: languagemodels
+Version: 0.0.1
+Requires-Dist: wheel
+Requires-Dist: autopep8
+Requires-Dist: numpy
+Requires-Dist: pandas
+Requires-Dist: matplotlib
+Requires-Dist: ipython
+Requires-Dist: notebook
+Requires-Dist: jupyter
+Requires-Dist: ipywidgets
+Requires-Dist: pytest
+Requires-Dist: wandb
+Requires-Dist: datasets==2.18.0
+Requires-Dist: tokenizers==0.15.2
+Requires-Dist: transformers==4.38.2

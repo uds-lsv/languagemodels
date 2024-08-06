@@ -1,0 +1,18 @@
+{
+  "_name_or_path": "./examples/configs/wikitext-103/model_config.json",
+  "add_bias": true,
+  "architectures": [
+    "RnnLM"
+  ],
+  "block_size": 128,
+  "cell_type": "lstm",
+  "dropout": 0.1,
+  "embedding_dim": 384,
+  "embedding_dropout": 0.1,
+  "hidden_dim": 1024,
+  "model_type": "rnn-lm",
+  "num_layers": 4,
+  "torch_dtype": "float32",
+  "transformers_version": "4.28.1",
+  "vocab_size": 10000
+}
