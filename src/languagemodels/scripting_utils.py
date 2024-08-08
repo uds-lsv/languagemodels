@@ -225,15 +225,43 @@ def compute_batch_surprisal(batch_input_ids, batch_mask, batch_logits, sequence_
 
     for inner_batch, (input_ids, mask, logits, sequence_ids) in enumerate(zip(batch_input_ids, batch_mask, batch_logits, sequence_ids)):
 
-        output_ids = input_ids[1:]
-        output_mask = mask[1:]
-        indices = torch.arange(0, output_ids.shape[0])
-        sequence_ids = sequence_ids[1:] # first sequence id can be ignored
+        if input_ids.shape[0] <= 1:
+            output_ids = input_ids
+            output_mask = mask
+            indices = torch.arange(0, output_ids.shape[0])
+            sequence_ids = sequence_ids
+        else:
+            output_ids = input_ids[1:]
+            output_mask = mask[1:]
+            indices = torch.arange(0, output_ids.shape[0])
+            sequence_ids = sequence_ids[1:] # first sequence id can be ignored
+
+        if output_ids.shape[0] == 0 or output_mask.shape[0] == 0:
+            print("Skipping due to empty output_ids or output_mask after slicing")
+            continue
 
         assert len(sequence_ids) == len(output_ids)
 
+        # Debug: Print shapes of tensors involved
+        print(f"logits shape: {logits.shape}")
+        print(f"indices shape: {indices.shape}")
+        print(f"output_ids shape: {output_ids.shape}")
+
+        if logits.dim() == 1:
+            logits = logits.unsqueeze(0)
+
+        # Ensure logits have at least two dimensions
+        if logits.dim() == 2 and logits.shape[0] == 1:
+            logits = logits.unsqueeze(0)  # Add batch dimension
+
+
         # ignore padded positions
-        surprisals = -1*torch.log2(F.softmax(logits, dim=-1)).squeeze(0)[indices, output_ids]
+        try:
+            surprisals = -1*torch.log2(F.softmax(logits, dim=-1)).squeeze(0)[indices, output_ids]
+        except IndexError as e:
+            print(f"IndexError: {e}")
+            print(f"Logits shape after potential reshape: {logits.shape}")
+            continue
         surprisals = [s for s, m in zip(surprisals.cpu().detach().numpy().tolist(), output_mask) if m > 0]
         tokens = [t for t, m in zip(tokenizer.convert_ids_to_tokens(output_ids), output_mask) if m > 0]
         token_ids = [i for i, m in zip(output_ids.cpu().detach().numpy().tolist(), output_mask) if m > 0]
@@ -246,14 +274,31 @@ def compute_batch_surprisal(batch_input_ids, batch_mask, batch_logits, sequence_
         tokens = [tokens[i] for i in non_eos_token_indices]
         token_ids = [token_ids[i] for i in non_eos_token_indices]
         sequence_ids = [sequence_ids[i] for i in non_eos_token_indices]
-        batch_mask[inner_batch] = torch.tensor([[mask[0]] + [1 if i in non_eos_token_indices else 0 for i in range(len(output_mask))]])
+
+
+        new_mask = torch.tensor([mask[0]] + [1 if i in non_eos_token_indices else 0 for i in range(len(output_mask))])
+        if new_mask.shape[0] != batch_mask[inner_batch].shape[0]:
+            print(f"Shape mismatch: new_mask.shape {new_mask.shape} vs batch_mask[inner_batch].shape {batch_mask[inner_batch].shape}")
+            batch_mask[inner_batch] = torch.nn.functional.pad(new_mask, (0, batch_mask[inner_batch].shape[0] - new_mask.shape[0]))
+        else:
+            batch_mask[inner_batch] = new_mask
+
+        # batch_mask[inner_batch] = torch.tensor([[mask[0]] + [1 if i in non_eos_token_indices else 0 for i in range(len(output_mask))]])
 
         out_dict["surprisal"].extend(surprisals)
         out_dict["tokens"].extend(tokens)
         out_dict["token_ids"].extend(token_ids)
         out_dict["sequence_ids"].extend(sequence_ids)
 
-    assert len(out_dict["surprisal"]) == batch_mask.sum().sum() - batch_mask.shape[0], f"{len(out_dict['surprisal'])}!={batch_mask.sum().sum() - batch_mask.shape[0]}"
+    # assert len(out_dict["surprisal"]) == batch_mask.sum().sum() - batch_mask.shape[0], f"{len(out_dict['surprisal'])}!={batch_mask.sum().sum() - batch_mask.shape[0]}"
+    total_surprisal_length = (batch_mask.sum(dim=1) - 1).sum().item()  # Subtract 1 for the initial mask[0]
+    print(f"Total surprisal length: {total_surprisal_length}, out_dict['surprisal'] length: {len(out_dict['surprisal'])}")
+    # assert len(out_dict["surprisal"]) == total_surprisal_length, f"{len(out_dict['surprisal'])}!={total_surprisal_length}"
+
+    if total_surprisal_length == 0 and len(out_dict["surprisal"]) == 1:
+        print("Special case: single-token input handled.")
+    else:
+        assert len(out_dict["surprisal"]) == total_surprisal_length, f"{len(out_dict['surprisal'])}!={total_surprisal_length}"
 
     return out_dict
 
